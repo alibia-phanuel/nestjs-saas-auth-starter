@@ -1,0 +1,52 @@
+{
+  "auth": {
+    "invalid_credentials": "Invalid email or password",
+    "email_not_verified": "Please verify your email before logging in",
+    "account_suspended": "Your account has been suspended",
+    "email_already_exists": "An account with this email already exists",
+    "signup_success": "Account created successfully. Please check your email.",
+    "login_success": "Login successful",
+    "logout_success": "Logout successful",
+    "token_invalid": "Invalid or expired token",
+    "token_expired": "Token has expired",
+    "email_verified": "Email verified successfully",
+    "password_reset_sent": "Password reset email sent",
+    "password_reset_success": "Password reset successfully",
+    "2fa_enabled": "Two-factor authentication enabled",
+    "2fa_disabled": "Two-factor authentication disabled",
+    "2fa_invalid": "Invalid two-factor authentication code",
+    "2fa_required": "Two-factor authentication code required",
+    "oauth_error": "OAuth authentication failed",
+    "api_key_invalid": "Invalid API key",
+    "api_key_created": "API key created successfully",
+    "api_key_revoked": "API key revoked successfully"
+  },
+  "users": {
+    "not_found": "User not found",
+    "updated": "Profile updated successfully",
+    "deleted": "Account deleted successfully",
+    "forbidden": "You do not have permission to perform this action"
+  },
+  "organizations": {
+    "not_found": "Organization not found",
+    "created": "Organization created successfully",
+    "updated": "Organization updated successfully",
+    "deleted": "Organization deleted successfully",
+    "already_member": "User is already a member of this organization",
+    "invitation_sent": "Invitation sent successfully",
+    "invitation_invalid": "Invalid or expired invitation",
+    "invitation_accepted": "Invitation accepted successfully"
+  },
+  "validation": {
+    "required": "This field is required",
+    "invalid_email": "Please provide a valid email address",
+    "password_too_short": "Password must be at least 8 characters",
+    "passwords_dont_match": "Passwords do not match"
+  },
+  "common": {
+    "internal_error": "An internal error occurred. Please try again.",
+    "not_found": "Resource not found",
+    "unauthorized": "Unauthorized",
+    "forbidden": "Forbidden"
+  }
+}

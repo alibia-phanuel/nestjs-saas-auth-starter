@@ -1,0 +1,52 @@
+{
+  "auth": {
+    "invalid_credentials": "Email ou mot de passe incorrect",
+    "email_not_verified": "Veuillez vérifier votre email avant de vous connecter",
+    "account_suspended": "Votre compte a été suspendu",
+    "email_already_exists": "Un compte avec cet email existe déjà",
+    "signup_success": "Compte créé avec succès. Veuillez vérifier votre email.",
+    "login_success": "Connexion réussie",
+    "logout_success": "Déconnexion réussie",
+    "token_invalid": "Token invalide ou expiré",
+    "token_expired": "Le token a expiré",
+    "email_verified": "Email vérifié avec succès",
+    "password_reset_sent": "Email de réinitialisation envoyé",
+    "password_reset_success": "Mot de passe réinitialisé avec succès",
+    "2fa_enabled": "Authentification à deux facteurs activée",
+    "2fa_disabled": "Authentification à deux facteurs désactivée",
+    "2fa_invalid": "Code d'authentification à deux facteurs invalide",
+    "2fa_required": "Code d'authentification à deux facteurs requis",
+    "oauth_error": "Échec de l'authentification OAuth",
+    "api_key_invalid": "Clé API invalide",
+    "api_key_created": "Clé API créée avec succès",
+    "api_key_revoked": "Clé API révoquée avec succès"
+  },
+  "users": {
+    "not_found": "Utilisateur introuvable",
+    "updated": "Profil mis à jour avec succès",
+    "deleted": "Compte supprimé avec succès",
+    "forbidden": "Vous n'avez pas la permission d'effectuer cette action"
+  },
+  "organizations": {
+    "not_found": "Organisation introuvable",
+    "created": "Organisation créée avec succès",
+    "updated": "Organisation mise à jour avec succès",
+    "deleted": "Organisation supprimée avec succès",
+    "already_member": "L'utilisateur est déjà membre de cette organisation",
+    "invitation_sent": "Invitation envoyée avec succès",
+    "invitation_invalid": "Invitation invalide ou expirée",
+    "invitation_accepted": "Invitation acceptée avec succès"
+  },
+  "validation": {
+    "required": "Ce champ est requis",
+    "invalid_email": "Veuillez fournir une adresse email valide",
+    "password_too_short": "Le mot de passe doit contenir au moins 8 caractères",
+    "passwords_dont_match": "Les mots de passe ne correspondent pas"
+  },
+  "common": {
+    "internal_error": "Une erreur interne s'est produite. Veuillez réessayer.",
+    "not_found": "Ressource introuvable",
+    "unauthorized": "Non autorisé",
+    "forbidden": "Accès refusé"
+  }
+}

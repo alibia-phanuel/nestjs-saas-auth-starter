@@ -57,6 +57,7 @@ Utilisez le bouton **Authorize** pour tester les endpoints protégés.
       'https://github.com/alibia-phanuel/nestjs-saas-auth-starter',
     )
     .addServer('http://localhost:3000', 'Development')
+    .addServer('https://nestjs-saas-starter.onrender.com', 'Production')
     .addBearerAuth(
       {
         type: 'http',

@@ -541,7 +541,7 @@ export class AppController {
       <div class="author-links">
         <a href="https://www.linkedin.com/in/phanuel-tsopze-8a33a52a4/" target="_blank">💼 LinkedIn</a>
         <a href="https://phanuel-alibia.com/" target="_blank">🌐 Portfolio</a>
-        <a href="https://github.com/phanuel19/nestjs-saas-auth-starter" target="_blank">⭐ GitHub</a>
+        <a href="https://github.com/alibia-phanuel/nestjs-saas-auth-starter" target="_blank">⭐ GitHub</a>
       </div>
     </div>
 

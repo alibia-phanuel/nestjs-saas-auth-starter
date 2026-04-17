@@ -1,12 +1,11 @@
 import { Controller, Get, Res } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
-import type { Response } from 'express';
-
+import express from 'express';
 @ApiExcludeController()
 @Controller()
 export class AppController {
   @Get()
-  getHome(@Res() res: Response) {
+  getHome(@Res() res: express.Response): void {
     res.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -255,18 +254,14 @@ export class AppController {
       margin-bottom: 14px;
     }
 
-    .card-icon {
-      font-size: 18px;
-    }
+    .card-icon { font-size: 18px; }
 
     .card-title {
       font-size: 14px;
       font-weight: 600;
     }
 
-    .card ul {
-      list-style: none;
-    }
+    .card ul { list-style: none; }
 
     .card ul li {
       font-size: 13px;
@@ -381,15 +376,29 @@ export class AppController {
 
     .progress-fill {
       height: 100%;
-      width: 7%;
+      width: 0%;
       background: linear-gradient(90deg, var(--red), #ff6b9d);
       border-radius: 999px;
-      animation: fillBar 1.5s ease 0.8s both;
+      transition: width 1.2s ease;
     }
 
-    @keyframes fillBar {
-      from { width: 0%; }
-      to   { width: 7%; }
+    /* ── Progress meta row ── */
+    .progress-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+      font-size: 12px;
+    }
+
+    #days-remaining { color: var(--muted); }
+
+    #live-timer {
+      color: var(--red);
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.3px;
     }
   </style>
 </head>
@@ -403,7 +412,7 @@ export class AppController {
     <div class="header">
       <div class="badge">
         <div class="pulse-dot"></div>
-        In active development — Day 1 / 14
+        <span id="badge-text">...</span>
       </div>
       <h1>nestjs-<span>saas</span>-starter</h1>
       <p class="subtitle">
@@ -433,10 +442,14 @@ export class AppController {
     <div class="progress-wrap">
       <div class="progress-header">
         <span>Build progress</span>
-        <span style="color:var(--red)">Day 1 / 14</span>
+        <span id="progress-label" style="color:var(--red)">...</span>
       </div>
       <div class="progress-bar">
-        <div class="progress-fill"></div>
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+      <div class="progress-meta">
+        <span id="days-remaining">⏳ ...</span>
+        <span id="live-timer">🕐 ...</span>
       </div>
     </div>
 
@@ -546,6 +559,80 @@ export class AppController {
     </div>
 
   </div>
+
+  <script>
+    (function () {
+      /* ── CONFIG ── */
+      const START_DATE = new Date('2026-04-16T08:00:00');
+      const TOTAL_DAYS = 14;
+      /* ─────────── */
+
+      const END_DATE = new Date(START_DATE);
+     END_DATE.setDate(END_DATE.getDate() + TOTAL_DAYS - 1); // ✅ 14 jours inclusifs
+
+      function pad(n) {
+        return String(n).padStart(2, '0');
+      }
+
+      function update() {
+        const now       = new Date();
+        const elapsed   = now - START_DATE;
+        const total     = END_DATE - START_DATE;
+        const remaining = END_DATE - now;
+
+        /* --- avant le début --- */
+        if (elapsed < 0) {
+          document.getElementById('badge-text').textContent     = 'In active development — Day 0 / ' + TOTAL_DAYS;
+          document.getElementById('progress-label').textContent = 'Day 0 / ' + TOTAL_DAYS + ' — 0%';
+          document.getElementById('days-remaining').textContent = '⏳ Challenge not started yet';
+          document.getElementById('live-timer').textContent     = '🕐 Starts soon';
+          document.getElementById('progress-fill').style.width  = '0%';
+          return;
+        }
+
+        /* --- après la fin --- */
+        if (remaining <= 0) {
+          document.getElementById('badge-text').textContent     = 'Challenge completed 🎉';
+          document.getElementById('progress-label').textContent = 'Day ' + TOTAL_DAYS + ' / ' + TOTAL_DAYS + ' — 100%';
+          document.getElementById('days-remaining').textContent = '🎉 Challenge completed!';
+          document.getElementById('live-timer').textContent     = '✅ Done';
+          document.getElementById('progress-fill').style.width  = '100%';
+          return;
+        }
+
+        /* --- calculs --- */
+        const pct        = Math.min(100, (elapsed / total) * 100);
+        const currentDay = Math.min(TOTAL_DAYS, Math.floor(elapsed / 86_400_000) + 1);
+        const daysLeft   = Math.ceil(remaining / 86_400_000);
+
+        const totalSec   = Math.floor(remaining / 1000);
+        const hours      = Math.floor(totalSec / 3600);
+        const minutes    = Math.floor((totalSec % 3600) / 60);
+        const seconds    = totalSec % 60;
+
+        /* --- DOM --- */
+        document.getElementById('badge-text').textContent =
+          'In active development — Day ' + currentDay + ' / ' + TOTAL_DAYS;
+
+        document.getElementById('progress-fill').style.width =
+          pct.toFixed(1) + '%';
+
+        document.getElementById('progress-label').textContent =
+          'Day ' + currentDay + ' / ' + TOTAL_DAYS +
+          ' — ' + Math.round(pct) + '%';
+
+        document.getElementById('days-remaining').textContent =
+          '⏳ ' + daysLeft + ' day' + (daysLeft > 1 ? 's' : '') + ' remaining';
+
+        document.getElementById('live-timer').textContent =
+          '🕐 Day ' + currentDay +
+          ' — ' + pad(hours) + 'h ' + pad(minutes) + 'm ' + pad(seconds) + 's';
+      }
+
+      update();
+      setInterval(update, 1000);
+    })();
+  </script>
 </body>
 </html>`);
   }

@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -6,8 +8,6 @@ import { AuthService } from '../auth.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { I18nService } from '../../i18n/i18n.service';
 import * as bcrypt from 'bcryptjs';
-
-// ── Mocks ──────────────────────────────────────────
 
 const mockPrismaService = {
   user: {
@@ -94,7 +94,6 @@ describe('AuthService', () => {
       });
 
       await service.signup(signupDto);
-
       const createCall = prisma.user.create.mock.calls[0][0];
       const hashedPassword: string = createCall.data.password;
 
@@ -109,7 +108,6 @@ describe('AuthService', () => {
         id: 'existing-uuid',
         email: signupDto.email,
       });
-
       await expect(service.signup(signupDto)).rejects.toThrow(
         ConflictException,
       );
@@ -130,7 +128,7 @@ describe('AuthService', () => {
       expect(result).not.toHaveProperty('password');
     });
 
-    it('should emit user.created event after signup', async () => {
+    it('should emit user.created event with OTP after signup', async () => {
       prisma.user.findUnique.mockResolvedValue(null);
       prisma.user.create.mockResolvedValue({
         id: 'uuid-123',
@@ -144,7 +142,10 @@ describe('AuthService', () => {
 
       expect(mockEventEmitter.emit).toHaveBeenCalledWith(
         'user.created',
-        expect.objectContaining({ email: signupDto.email }),
+        expect.objectContaining({
+          email: signupDto.email,
+          otp: expect.stringMatching(/^\d{6}$/), // OTP = 6 chiffres
+        }),
       );
     });
   });
@@ -156,9 +157,7 @@ describe('AuthService', () => {
       email: 'phanuel@example.com',
       password: 'SecurePass123!',
     };
-
     const hashedPassword = bcrypt.hashSync('SecurePass123!', 10);
-
     const mockUser = {
       id: 'uuid-123',
       email: 'phanuel@example.com',
@@ -177,7 +176,6 @@ describe('AuthService', () => {
         .mockResolvedValueOnce('refresh-token-mock');
 
       const result = await service.login(loginDto);
-
       expect(result).toHaveProperty('accessToken');
       expect(result).toHaveProperty('refreshToken');
       expect(result).toHaveProperty('key', 'auth.login_success');
@@ -241,13 +239,11 @@ describe('AuthService', () => {
 
       prisma.refreshToken.update.mockResolvedValue({});
       prisma.refreshToken.create.mockResolvedValue({});
-
       mockJwtService.signAsync
         .mockResolvedValueOnce('new-access-token')
         .mockResolvedValueOnce('new-refresh-token');
 
       const result = await service.refreshToken('valid-refresh-token');
-
       expect(result).toHaveProperty('accessToken', 'new-access-token');
       expect(result).toHaveProperty('refreshToken', 'new-refresh-token');
     });
@@ -259,7 +255,6 @@ describe('AuthService', () => {
         isRevoked: true,
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       });
-
       await expect(service.refreshToken('revoked-token')).rejects.toThrow(
         UnauthorizedException,
       );
@@ -272,7 +267,6 @@ describe('AuthService', () => {
         isRevoked: false,
         expiresAt: new Date(Date.now() - 1000),
       });
-
       await expect(service.refreshToken('expired-token')).rejects.toThrow(
         UnauthorizedException,
       );
@@ -280,50 +274,179 @@ describe('AuthService', () => {
 
     it('should throw UnauthorizedException if token not found', async () => {
       prisma.refreshToken.findUnique.mockResolvedValue(null);
-
       await expect(service.refreshToken('unknown-token')).rejects.toThrow(
         UnauthorizedException,
       );
     });
   });
 
-  // ── verifyEmail() ───────────────────────────────
+  // ── verifyOtp() ──────────────────────────────────
 
-  describe('verifyEmail()', () => {
-    it('should activate account when token is valid', async () => {
+  describe('verifyOtp()', () => {
+    it('should activate account when OTP is valid', async () => {
       prisma.user.findUnique.mockResolvedValue({
         id: 'uuid-123',
         email: 'phanuel@example.com',
-        verificationToken: 'valid-token',
+        otpCode: '847392',
+        otpExpiresAt: new Date(Date.now() + 10 * 60 * 1000), // expire dans 10min
         emailVerified: false,
         status: 'PENDING',
       });
+      prisma.user.update.mockResolvedValue({});
 
-      prisma.user.update.mockResolvedValue({
-        id: 'uuid-123',
-        emailVerified: true,
-        status: 'ACTIVE',
+      const result = await service.verifyOtp({
+        email: 'phanuel@example.com',
+        otp: '847392',
       });
 
-      const result = await service.verifyEmail('valid-token');
-      expect(result).toHaveProperty('key', 'auth.email_verified');
+      expect(result).toHaveProperty('key', 'auth.otp_verified');
       expect(prisma.user.update).toHaveBeenCalledWith(
         expect.objectContaining({
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           data: expect.objectContaining({
             emailVerified: true,
             status: 'ACTIVE',
-            verificationToken: null,
+            otpCode: null,
+            otpExpiresAt: null,
           }),
         }),
       );
     });
 
-    it('should throw UnauthorizedException if token is invalid', async () => {
+    it('should throw UnauthorizedException if OTP is wrong', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'uuid-123',
+        email: 'phanuel@example.com',
+        otpCode: '847392',
+        otpExpiresAt: new Date(Date.now() + 10 * 60 * 1000),
+        emailVerified: false,
+        status: 'PENDING',
+      });
+
+      await expect(
+        service.verifyOtp({ email: 'phanuel@example.com', otp: '000000' }),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should throw UnauthorizedException if OTP is expired', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'uuid-123',
+        email: 'phanuel@example.com',
+        otpCode: '847392',
+        otpExpiresAt: new Date(Date.now() - 1000), // expiré
+        emailVerified: false,
+        status: 'PENDING',
+      });
+
+      await expect(
+        service.verifyOtp({ email: 'phanuel@example.com', otp: '847392' }),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should throw UnauthorizedException if user not found', async () => {
       prisma.user.findUnique.mockResolvedValue(null);
 
-      await expect(service.verifyEmail('invalid-token')).rejects.toThrow(
-        UnauthorizedException,
+      await expect(
+        service.verifyOtp({ email: 'unknown@example.com', otp: '847392' }),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  // ── forgotPassword() ─────────────────────────────
+
+  describe('forgotPassword()', () => {
+    it('should emit password.reset event when user exists', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'uuid-123',
+        email: 'phanuel@example.com',
+        firstName: 'Phanuel',
+      });
+      prisma.user.update.mockResolvedValue({});
+
+      const result = await service.forgotPassword('phanuel@example.com');
+
+      expect(result).toHaveProperty('key', 'auth.password_reset_sent');
+      expect(mockEventEmitter.emit).toHaveBeenCalledWith(
+        'password.reset',
+        expect.objectContaining({
+          email: 'phanuel@example.com',
+          otp: expect.stringMatching(/^\d{6}$/),
+        }),
       );
+    });
+
+    it('should return same response even if user does not exist (security)', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+
+      const result = await service.forgotPassword('unknown@example.com');
+
+      // Sécurité : on ne révèle pas si l'email existe ou non
+      expect(result).toHaveProperty('key', 'auth.password_reset_sent');
+      expect(mockEventEmitter.emit).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── resetPassword() ──────────────────────────────
+
+  describe('resetPassword()', () => {
+    it('should reset password when OTP is valid', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'uuid-123',
+        email: 'phanuel@example.com',
+        otpCode: '123456',
+        otpExpiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      });
+      prisma.user.update.mockResolvedValue({});
+
+      const result = await service.resetPassword({
+        email: 'phanuel@example.com',
+        otp: '123456',
+        newPassword: 'NewSecurePass123!',
+      });
+
+      expect(result).toHaveProperty('key', 'auth.password_reset_success');
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            otpCode: null,
+            otpExpiresAt: null,
+          }),
+        }),
+      );
+    });
+
+    it('should throw UnauthorizedException if OTP is invalid', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'uuid-123',
+        email: 'phanuel@example.com',
+        otpCode: '123456',
+        otpExpiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      });
+
+      await expect(
+        service.resetPassword({
+          email: 'phanuel@example.com',
+          otp: '000000',
+          newPassword: 'NewSecurePass123!',
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should throw UnauthorizedException if OTP is expired', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'uuid-123',
+        email: 'phanuel@example.com',
+        otpCode: '123456',
+        otpExpiresAt: new Date(Date.now() - 1000),
+      });
+
+      await expect(
+        service.resetPassword({
+          email: 'phanuel@example.com',
+          otp: '123456',
+          newPassword: 'NewSecurePass123!',
+        }),
+      ).rejects.toThrow(UnauthorizedException);
     });
   });
 });

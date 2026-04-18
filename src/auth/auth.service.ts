@@ -6,11 +6,11 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import * as bcrypt from 'bcryptjs';
-import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { I18nService } from '../i18n/i18n.service';
 import { SignupDto } from './dto/signup.dto';
 import { LoginDto } from './dto/login.dto';
+import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { User, UserStatus } from '../generated/prisma/client.js';
 
 // ── Types ────────────────────────────────────────────
@@ -19,7 +19,8 @@ type SafeUser = Omit<
   User,
   | 'password'
   | 'twoFactorSecret'
-  | 'verificationToken'
+  | 'otpCode'
+  | 'otpExpiresAt'
   | 'resetToken'
   | 'resetTokenExpiry'
 >;
@@ -45,6 +46,20 @@ export class AuthService {
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
+  // ── HELPERS OTP ──────────────────────────────────
+
+  private generateOtp(): string {
+    // Génère un code à 6 chiffres
+    return Math.floor(100000 + Math.random() * 900000).toString();
+  }
+
+  private getOtpExpiry(): Date {
+    // OTP valide 15 minutes
+    const expiry = new Date();
+    expiry.setMinutes(expiry.getMinutes() + 15);
+    return expiry;
+  }
+
   // ── SIGNUP ──────────────────────────────────────
 
   async signup(
@@ -61,9 +76,8 @@ export class AuthService {
     }
 
     const hashedPassword: string = await bcrypt.hash(dto.password, 10);
-
-    // Génère un token de vérification email
-    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const otp = this.generateOtp();
+    const otpExpiresAt = this.getOtpExpiry();
 
     const user: Partial<SafeUser> = await this.prisma.user.create({
       data: {
@@ -71,7 +85,8 @@ export class AuthService {
         password: hashedPassword,
         firstName: dto.firstName,
         lastName: dto.lastName,
-        verificationToken,
+        otpCode: otp,
+        otpExpiresAt,
       },
       select: {
         id: true,
@@ -84,16 +99,135 @@ export class AuthService {
       },
     });
 
-    // Rappel Module 20 (13:35:43 Event Emitter)
-    // Découplage total : AuthService ne connaît pas MailService
+    // Rappel Module 20 — Event Emitter découplé
     this.eventEmitter.emit('user.created', {
       email: dto.email,
       firstName: dto.firstName,
-      verificationToken,
+      otp,
     });
 
     const response = this.i18n.createResponse('auth.signup_success');
     return { key: response.key, message: response.message, user };
+  }
+
+  // ── VERIFY OTP ───────────────────────────────────
+
+  async verifyOtp(
+    dto: VerifyOtpDto,
+  ): Promise<{ key: string; message: string }> {
+    const user = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException(
+        this.i18n.createResponse('auth.otp_invalid'),
+      );
+    }
+
+    // OTP correct ?
+    if (user.otpCode !== dto.otp) {
+      throw new UnauthorizedException(
+        this.i18n.createResponse('auth.otp_invalid'),
+      );
+    }
+
+    // OTP expiré ?
+    if (!user.otpExpiresAt || user.otpExpiresAt < new Date()) {
+      throw new UnauthorizedException(
+        this.i18n.createResponse('auth.otp_invalid'),
+      );
+    }
+
+    // Active le compte
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        emailVerified: true,
+        status: UserStatus.ACTIVE,
+        otpCode: null,
+        otpExpiresAt: null,
+      },
+    });
+
+    return this.i18n.createResponse('auth.otp_verified');
+  }
+
+  // ── FORGOT PASSWORD ──────────────────────────────
+
+  async forgotPassword(
+    email: string,
+  ): Promise<{ key: string; message: string }> {
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+    });
+
+    // Sécurité : même réponse si l'email n'existe pas
+    // On ne révèle pas si l'email est enregistré ou non
+    if (!user) {
+      return this.i18n.createResponse('auth.password_reset_sent');
+    }
+
+    const otp = this.generateOtp();
+    const otpExpiresAt = this.getOtpExpiry();
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { otpCode: otp, otpExpiresAt },
+    });
+
+    this.eventEmitter.emit('password.reset', {
+      email: user.email,
+      firstName: user.firstName,
+      otp,
+    });
+
+    return this.i18n.createResponse('auth.password_reset_sent');
+  }
+
+  // ── RESET PASSWORD ───────────────────────────────
+
+  async resetPassword(dto: {
+    email: string;
+    otp: string;
+    newPassword: string;
+  }): Promise<{ key: string; message: string }> {
+    const user = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException(
+        this.i18n.createResponse('auth.otp_invalid'),
+      );
+    }
+
+    // OTP correct ?
+    if (user.otpCode !== dto.otp) {
+      throw new UnauthorizedException(
+        this.i18n.createResponse('auth.otp_invalid'),
+      );
+    }
+
+    // OTP expiré ?
+    if (!user.otpExpiresAt || user.otpExpiresAt < new Date()) {
+      throw new UnauthorizedException(
+        this.i18n.createResponse('auth.otp_invalid'),
+      );
+    }
+
+    const hashedPassword = await bcrypt.hash(dto.newPassword, 10);
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+        otpCode: null,
+        otpExpiresAt: null,
+      },
+    });
+
+    return this.i18n.createResponse('auth.password_reset_success');
   }
 
   // ── LOGIN ───────────────────────────────────────
@@ -122,14 +256,12 @@ export class AuthService {
       );
     }
 
-    // Vérifie d'abord la suspension
     if (user.status === UserStatus.SUSPENDED) {
       throw new UnauthorizedException(
         this.i18n.createResponse('auth.account_suspended'),
       );
     }
 
-    // Ensuite vérifie l'activation email
     if (!user.emailVerified || user.status !== UserStatus.ACTIVE) {
       throw new UnauthorizedException(
         this.i18n.createResponse('auth.email_not_verified'),
@@ -143,78 +275,42 @@ export class AuthService {
     return { key: response.key, message: response.message, ...tokens };
   }
 
-  // ── REFRESH ACCESS TOKEN ─────────────────────────
-  // Nom: refreshToken pour compatibilité avec les tests existants
+  // ── REFRESH TOKEN ────────────────────────────────
 
   async refreshToken(token: string): Promise<AuthTokens> {
-    // 1. Trouve le token en DB avec l'user associé
     const stored = await this.prisma.refreshToken.findUnique({
       where: { token },
       include: { user: true },
     });
 
-    // 2. Token inexistant ?
     if (!stored) {
       throw new UnauthorizedException(
         this.i18n.createResponse('auth.token_invalid'),
       );
     }
 
-    // 3. Token révoqué ?
     if (stored.isRevoked) {
       throw new UnauthorizedException(
         this.i18n.createResponse('auth.token_invalid'),
       );
     }
 
-    // 4. Token expiré ?
     if (stored.expiresAt < new Date()) {
       throw new UnauthorizedException(
         this.i18n.createResponse('auth.token_expired'),
       );
     }
 
-    // 5. Révoque l'ancien token — rotation des tokens
-    // Sécurité : un refresh token ne peut être utilisé qu'une seule fois
     await this.prisma.refreshToken.update({
       where: { token },
       data: { isRevoked: true },
     });
 
-    // 6. Génère de nouveaux tokens
     const tokens = await this.generateTokens(stored.user.id, stored.user.email);
 
-    // 7. Sauvegarde le nouveau refresh token
     await this.saveRefreshToken(stored.user.id, tokens.refreshToken);
 
     return tokens;
-  }
-
-  // ── VERIFY EMAIL ─────────────────────────────────
-
-  async verifyEmail(token: string): Promise<{ key: string; message: string }> {
-    // Cherche l'user avec ce token de vérification
-    const user = await this.prisma.user.findUnique({
-      where: { verificationToken: token },
-    });
-
-    if (!user) {
-      throw new UnauthorizedException(
-        this.i18n.createResponse('auth.token_invalid'),
-      );
-    }
-
-    // Active le compte
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: {
-        emailVerified: true,
-        status: UserStatus.ACTIVE,
-        verificationToken: null,
-      },
-    });
-
-    return this.i18n.createResponse('auth.email_verified');
   }
 
   // ── HELPERS PRIVÉS ──────────────────────────────

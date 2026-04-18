@@ -12,3 +12,197 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+// ─────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────
+
+enum UserStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+}
+
+enum OAuthProvider {
+  GOOGLE
+  APPLE
+}
+
+enum PlanType {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum MemberRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+// ─────────────────────────────────────────
+// USER
+// ─────────────────────────────────────────
+model User {
+  id                String     @id @default(uuid())
+  email             String     @unique
+  password          String?
+  firstName         String?
+  lastName          String?
+  status            UserStatus @default(PENDING)
+  emailVerified     Boolean    @default(false)
+
+  // OTP Email Verification
+  otpCode           String?
+  otpExpiresAt      DateTime?
+
+  // Reset Password
+  resetToken        String?
+  resetTokenExpiry  DateTime?
+
+  // 2FA
+  twoFactorEnabled  Boolean    @default(false)
+  twoFactorSecret   String?
+
+  roles             UserRole[]
+  oauthAccounts     OAuthAccount[]
+  apiKeys           ApiKey[]
+  memberships       OrganizationMember[]
+  refreshTokens     RefreshToken[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+// ─────────────────────────────────────────
+// RBAC
+// ─────────────────────────────────────────
+
+model Role {
+  id          String       @id @default(uuid())
+  name        String       @unique
+  description String?
+  permissions Permission[]
+  users       UserRole[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("roles")
+}
+
+model Permission {
+  id     String @id @default(uuid())
+  action String
+  roles  Role[]
+
+  @@map("permissions")
+}
+
+model UserRole {
+  userId String
+  roleId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+// ─────────────────────────────────────────
+// OAuth
+// ─────────────────────────────────────────
+
+model OAuthAccount {
+  id         String        @id @default(uuid())
+  provider   OAuthProvider
+  providerId String
+  userId     String
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerId])
+  @@map("oauth_accounts")
+}
+
+// ─────────────────────────────────────────
+// API Key
+// ─────────────────────────────────────────
+
+model ApiKey {
+  id        String    @id @default(uuid())
+  key       String    @unique
+  name      String
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastUsed  DateTime?
+  expiresAt DateTime?
+  isActive  Boolean   @default(true)
+
+  createdAt DateTime @default(now())
+
+  @@map("api_keys")
+}
+
+// ─────────────────────────────────────────
+// Refresh Token
+// ─────────────────────────────────────────
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  isRevoked Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@map("refresh_tokens")
+}
+
+// ─────────────────────────────────────────
+// ORGANISATIONS
+// ─────────────────────────────────────────
+
+model Organization {
+  id          String               @id @default(uuid())
+  name        String
+  slug        String               @unique
+  planType    PlanType             @default(FREE)
+  members     OrganizationMember[]
+  invitations Invitation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("organizations")
+}
+
+model OrganizationMember {
+  id             String       @id @default(uuid())
+  userId         String
+  organizationId String
+  role           MemberRole   @default(MEMBER)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  joinedAt DateTime @default(now())
+
+  @@unique([userId, organizationId])
+  @@map("organization_members")
+}
+
+model Invitation {
+  id             String       @id @default(uuid())
+  email          String
+  token          String       @unique
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@map("invitations")
+}

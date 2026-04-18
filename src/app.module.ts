@@ -5,6 +5,7 @@ import { I18nModule } from './i18n/i18n.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { AppController } from './app.controller';
 import { AuthModule } from './auth/auth.module';
+import { MailModule } from './mail/mail.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -14,6 +15,7 @@ import { AuthModule } from './auth/auth.module';
     I18nModule,
     PrismaModule,
     AuthModule,
+    MailModule,
   ],
   controllers: [AppController],
 })

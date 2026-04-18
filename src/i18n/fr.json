@@ -1,5 +1,10 @@
 {
   "auth": {
+"otp_sent": "Un code de vérification a été envoyé à votre email",
+"otp_invalid": "Code de vérification invalide ou expiré",
+"otp_verified": "Email vérifié avec succès",
+"password_reset_sent": "Code de réinitialisation envoyé à votre email",
+"password_reset_success": "Mot de passe réinitialisé avec succès",
     "invalid_credentials": "Email ou mot de passe incorrect",
     "email_not_verified": "Veuillez vérifier votre email avant de vous connecter",
     "account_suspended": "Votre compte a été suspendu",
@@ -10,8 +15,6 @@
     "token_invalid": "Token invalide ou expiré",
     "token_expired": "Le token a expiré",
     "email_verified": "Email vérifié avec succès",
-    "password_reset_sent": "Email de réinitialisation envoyé",
-    "password_reset_success": "Mot de passe réinitialisé avec succès",
     "2fa_enabled": "Authentification à deux facteurs activée",
     "2fa_disabled": "Authentification à deux facteurs désactivée",
     "2fa_invalid": "Code d'authentification à deux facteurs invalide",

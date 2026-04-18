@@ -52,7 +52,7 @@ model User {
   lastName          String?
   status            UserStatus @default(PENDING)
   emailVerified     Boolean    @default(false)
-  verificationToken String?
+  verificationToken String?    @unique
   resetToken        String?
   resetTokenExpiry  DateTime?
 

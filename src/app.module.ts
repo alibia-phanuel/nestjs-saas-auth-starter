@@ -4,6 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { I18nModule } from './i18n/i18n.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { AppController } from './app.controller';
+import { AuthModule } from './auth/auth.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -12,6 +13,7 @@ import { AppController } from './app.controller';
     }),
     I18nModule,
     PrismaModule,
+    AuthModule,
   ],
   controllers: [AppController],
 })

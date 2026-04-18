@@ -1,97 +1,67 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { AuthService } from '../auth.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { I18nService } from '../../i18n/i18n.service';
 import * as bcrypt from 'bcryptjs';
 
-// =============================================
-// Définition des types pour les mocks (très important !)
-// =============================================
+// ── Mocks ──────────────────────────────────────────
 
-/** Type complet du mock pour PrismaService */
-type MockPrismaService = {
-  user: {
-    findUnique: jest.Mock;
-    create: jest.Mock;
-  };
-};
-
-/** Type complet du mock pour I18nService */
-type MockI18nService = {
-  translate: jest.Mock;
-  createResponse: jest.Mock;
-};
-
-// =============================================
-// Création des mocks avec typage
-// =============================================
-
-const mockPrismaService: MockPrismaService = {
+const mockPrismaService = {
   user: {
     findUnique: jest.fn(),
     create: jest.fn(),
   },
+  refreshToken: {
+    create: jest.fn(),
+  },
 };
 
-const mockI18nService: MockI18nService = {
+const mockI18nService = {
   translate: jest.fn((key: string) => key),
-  createResponse: jest.fn((key: string, data?: any) => ({
-    key,
-    message: key,
-    ...data,
-  })),
+  createResponse: jest.fn((key: string) => ({ key, message: key })),
+};
+
+const mockJwtService = {
+  signAsync: jest.fn(),
 };
 
 describe('AuthService', () => {
   let service: AuthService;
-  let prismaMock: MockPrismaService; // Typage fort ici
-  let i18nMock: MockI18nService; // Typage fort ici
+  let prisma: typeof mockPrismaService;
 
-  // Données de test réutilisables
-  const signupDto = {
-    email: 'phanuel@example.com',
-    password: 'SecurePass123!',
-    firstName: 'Phanuel',
-    lastName: 'Tsopze',
-  };
-
-  // =============================================
-  // Avant chaque test
-  // =============================================
   beforeEach(async () => {
-    jest.clearAllMocks(); // Nettoie tous les mocks
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: I18nService, useValue: mockI18nService },
+        { provide: JwtService, useValue: mockJwtService },
       ],
     }).compile();
 
     service = module.get<AuthService>(AuthService);
+    prisma = module.get(PrismaService);
 
-    // On récupère les mocks avec le bon typage
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-    prismaMock = module.get(PrismaService) as MockPrismaService;
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-    i18nMock = module.get(I18nService) as MockI18nService;
+    jest.clearAllMocks();
   });
 
-  // =============================================
-  // Tests de la méthode signup()
-  // =============================================
+  // ── signup() ────────────────────────────────────
+
   describe('signup()', () => {
-    it('devrait créer un nouvel utilisateur avec succès', async () => {
-      // ARRANGE
-      prismaMock.user.findUnique.mockResolvedValue(null);
-      prismaMock.user.create.mockResolvedValue({
+    const signupDto = {
+      email: 'phanuel@example.com',
+      password: 'SecurePass123!',
+      firstName: 'Phanuel',
+      lastName: 'Tsopze',
+    };
+
+    it('should create a new user successfully', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+      prisma.user.create.mockResolvedValue({
         id: 'uuid-123',
         email: signupDto.email,
         firstName: signupDto.firstName,
@@ -101,17 +71,14 @@ describe('AuthService', () => {
         createdAt: new Date(),
       });
 
-      // ACT
       const result = await service.signup(signupDto);
-
-      // ASSERT
-      expect(result.key).toBe('auth.signup_success');
-      expect(prismaMock.user.create).toHaveBeenCalledTimes(1);
+      expect(result).toHaveProperty('key', 'auth.signup_success');
+      expect(prisma.user.create).toHaveBeenCalledTimes(1);
     });
 
-    it('devrait hasher le mot de passe avant de le sauvegarder', async () => {
-      prismaMock.user.findUnique.mockResolvedValue(null);
-      prismaMock.user.create.mockResolvedValue({
+    it('should hash the password before saving', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+      prisma.user.create.mockResolvedValue({
         id: 'uuid-123',
         email: signupDto.email,
         status: 'PENDING',
@@ -121,8 +88,8 @@ describe('AuthService', () => {
 
       await service.signup(signupDto);
 
-      const createArg = prismaMock.user.create.mock.calls[0][0];
-      const hashedPassword: string = createArg.data.password;
+      const createCall = prisma.user.create.mock.calls[0][0];
+      const hashedPassword: string = createCall.data.password;
 
       expect(hashedPassword).not.toBe(signupDto.password);
       expect(await bcrypt.compare(signupDto.password, hashedPassword)).toBe(
@@ -130,8 +97,8 @@ describe('AuthService', () => {
       );
     });
 
-    it('devrait renvoyer une erreur ConflictException si l’email existe déjà', async () => {
-      prismaMock.user.findUnique.mockResolvedValue({
+    it('should throw ConflictException if email already exists', async () => {
+      prisma.user.findUnique.mockResolvedValue({
         id: 'existing-uuid',
         email: signupDto.email,
       });
@@ -139,12 +106,12 @@ describe('AuthService', () => {
       await expect(service.signup(signupDto)).rejects.toThrow(
         ConflictException,
       );
-      expect(prismaMock.user.create).not.toHaveBeenCalled();
+      expect(prisma.user.create).not.toHaveBeenCalled();
     });
 
-    it('ne devrait jamais retourner le mot de passe dans la réponse', async () => {
-      prismaMock.user.findUnique.mockResolvedValue(null);
-      prismaMock.user.create.mockResolvedValue({
+    it('should not return the password in the response', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+      prisma.user.create.mockResolvedValue({
         id: 'uuid-123',
         email: signupDto.email,
         status: 'PENDING',
@@ -153,20 +120,87 @@ describe('AuthService', () => {
       });
 
       const result = await service.signup(signupDto);
-
       expect(result).not.toHaveProperty('password');
     });
+  });
 
-    it('devrait utiliser le service de traduction pour le message de succès', async () => {
-      prismaMock.user.findUnique.mockResolvedValue(null);
-      prismaMock.user.create.mockResolvedValue({
-        id: 'uuid-123',
-        email: signupDto.email,
+  // ── login() ─────────────────────────────────────
+
+  describe('login()', () => {
+    const loginDto = {
+      email: 'phanuel@example.com',
+      password: 'SecurePass123!',
+    };
+
+    const hashedPassword = bcrypt.hashSync('SecurePass123!', 10);
+
+    const mockUser = {
+      id: 'uuid-123',
+      email: 'phanuel@example.com',
+      password: hashedPassword,
+      firstName: 'Phanuel',
+      status: 'ACTIVE',
+      emailVerified: true,
+      twoFactorEnabled: false,
+    };
+
+    it('should return access and refresh tokens on success', async () => {
+      // ARRANGE
+      prisma.user.findUnique.mockResolvedValue(mockUser);
+      prisma.refreshToken.create.mockResolvedValue({});
+      mockJwtService.signAsync
+        .mockResolvedValueOnce('access-token-mock')
+        .mockResolvedValueOnce('refresh-token-mock');
+
+      // ACT
+      const result = await service.login(loginDto);
+
+      // ASSERT
+      expect(result).toHaveProperty('accessToken');
+      expect(result).toHaveProperty('refreshToken');
+      expect(result).toHaveProperty('key', 'auth.login_success');
+    });
+
+    it('should throw UnauthorizedException if user not found', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+
+      await expect(service.login(loginDto)).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    it('should throw UnauthorizedException if password is wrong', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        ...mockUser,
+        password: bcrypt.hashSync('WrongPassword!', 10),
       });
 
-      await service.signup(signupDto);
+      await expect(service.login(loginDto)).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
 
-      expect(i18nMock.createResponse).toHaveBeenCalled();
+    it('should throw UnauthorizedException if account is PENDING', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        ...mockUser,
+        status: 'PENDING',
+        emailVerified: false,
+      });
+
+      await expect(service.login(loginDto)).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    it('should throw UnauthorizedException if account is SUSPENDED', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        ...mockUser,
+        status: 'SUSPENDED',
+      });
+
+      await expect(service.login(loginDto)).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
   });
 });

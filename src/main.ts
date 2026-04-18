@@ -7,12 +7,11 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   // ─── Validation globale ───────────────────────
-  // Rappel Module 2 (00:48:10) — class-validator
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true, // supprime les champs non déclarés dans le DTO
-      forbidNonWhitelisted: true, // erreur si champ inconnu envoyé
-      transform: true, // transforme les types automatiquement
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
     }),
   );
 
@@ -28,18 +27,18 @@ async function bootstrap() {
     .setTitle('nestjs-saas-starter')
     .setDescription(
       `
-## Enterprise-grade SaaS Starter Kit
+## Kit de démarrage SaaS Enterprise
 
 API REST complète pour accélérer vos projets SaaS.
 
-### Features
+### Fonctionnalités
 - 🔐 **Auth** — JWT, Refresh Token, 2FA, OAuth, API Key
-- 👥 **Users** — CRUD, RBAC, Email activation
-- 🏢 **SaaS** — Multi-tenancy, Plans, Invitations
-- 🌍 **i18n** — Message Keys pour frontends multilingues
+- 👥 **Users** — CRUD, RBAC, Activation par email
+- 🏢 **SaaS** — Multi-tenant, Plans, Invitations
+- 🌍 **i18n** — Clés de messages pour frontends multilingues
 - 🧪 **TDD** — Couverture de tests > 80%
 
-### Authentication
+### Authentification
 Utilisez le bouton **Authorize** pour tester les endpoints protégés.
 - **Bearer Token** : \`Authorization: Bearer <access_token>\`
 - **API Key** : \`x-api-key: <api_key>\`
@@ -56,31 +55,34 @@ Utilisez le bouton **Authorize** pour tester les endpoints protégés.
       'GitHub Repository',
       'https://github.com/alibia-phanuel/nestjs-saas-auth-starter',
     )
-    .addServer('http://localhost:3000', 'Development')
+    .addServer('http://localhost:3000', 'Développement')
     .addServer('https://nestjs-saas-auth-starter.onrender.com', 'Production')
     .addBearerAuth(
       {
         type: 'http',
         scheme: 'bearer',
         bearerFormat: 'JWT',
-        description: 'Enter your JWT access token',
+        description: 'Entrez votre access token JWT',
       },
-      'access-token', // ← nom de référence pour @ApiBearerAuth()
+      'access-token',
     )
     .addApiKey(
       {
         type: 'apiKey',
         in: 'header',
         name: 'x-api-key',
-        description: 'Enter your API Key',
+        description: 'Entrez votre clé API',
       },
-      'api-key', // ← nom de référence pour @ApiSecurity()
+      'api-key',
     )
-    .addTag('Auth', 'Signup, Login, Logout, Token refresh')
-    .addTag('Users', 'User management and profiles')
-    .addTag('Organizations', 'Multi-tenancy management')
-    .addTag('Plans', 'SaaS subscription plans')
-    .addTag('Health', 'Application health check')
+    .addTag(
+      'Auth',
+      'Inscription, Connexion, Déconnexion, Rafraîchissement du token',
+    )
+    .addTag('Users', 'Gestion des utilisateurs et profils')
+    .addTag('Organizations', 'Gestion multi-tenant')
+    .addTag('Plans', "Plans d'abonnement SaaS")
+    .addTag('Health', "Vérification de l'état du serveur")
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
@@ -94,7 +96,7 @@ Utilisez le bouton **Authorize** pour tester les endpoints protégés.
       .swagger-ui .info .title { color: #e0234e; }
     `,
     swaggerOptions: {
-      persistAuthorization: true, // garde le token entre les refreshs
+      persistAuthorization: true,
       displayRequestDuration: true,
       filter: true,
       showExtensions: true,

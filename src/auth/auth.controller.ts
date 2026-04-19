@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   Controller,
   Post,
@@ -24,6 +23,7 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
+import type { JwtPayload } from './auth.service';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -32,58 +32,66 @@ export class AuthController {
 
   @Post('signup')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Register — sends OTP to email' })
-  @ApiResponse({ status: 201, description: 'OTP sent to email' })
-  @ApiResponse({ status: 409, description: 'Email already exists' })
-  async signup(@Body() dto: SignupDto) {
+  @ApiOperation({ summary: 'Inscription — envoie un OTP par email' })
+  @ApiResponse({ status: 201, description: 'OTP envoyé par email' })
+  @ApiResponse({
+    status: 409,
+    description: 'Un compte avec cet email existe déjà',
+  })
+  async signup(@Body() dto: SignupDto): Promise<unknown> {
     return this.authService.signup(dto);
   }
 
   @Post('verify-otp')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Verify OTP to activate account' })
+  @ApiOperation({ summary: "Vérifier l'OTP pour activer le compte" })
   @ApiBody({ type: VerifyOtpDto })
-  @ApiResponse({ status: 200, description: 'Account activated' })
-  @ApiResponse({ status: 401, description: 'Invalid or expired OTP' })
-  async verifyOtp(@Body() dto: VerifyOtpDto) {
+  @ApiResponse({ status: 200, description: 'Compte activé avec succès' })
+  @ApiResponse({ status: 401, description: 'OTP invalide ou expiré' })
+  async verifyOtp(@Body() dto: VerifyOtpDto): Promise<unknown> {
     return this.authService.verifyOtp(dto);
   }
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Login with email and password' })
+  @ApiOperation({ summary: 'Se connecter avec email et mot de passe' })
   @ApiBody({ type: LoginDto })
-  @ApiResponse({ status: 200, description: 'Returns JWT tokens' })
-  @ApiResponse({ status: 401, description: 'Invalid credentials' })
-  async login(@Body() dto: LoginDto) {
+  @ApiResponse({ status: 200, description: 'Retourne les tokens JWT' })
+  @ApiResponse({ status: 401, description: 'Identifiants invalides' })
+  async login(@Body() dto: LoginDto): Promise<unknown> {
     return this.authService.login(dto);
   }
 
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Refresh access token' })
+  @ApiOperation({ summary: "Rafraîchir l'access token" })
   @ApiBody({ type: RefreshTokenDto })
-  @ApiResponse({ status: 200, description: 'New tokens returned' })
-  async refresh(@Body() dto: RefreshTokenDto) {
+  @ApiResponse({ status: 200, description: 'Nouveaux tokens retournés' })
+  async refresh(@Body() dto: RefreshTokenDto): Promise<unknown> {
     return this.authService.refreshToken(dto.refreshToken);
   }
 
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Request password reset — sends OTP to email' })
+  @ApiOperation({
+    summary: 'Demander une réinitialisation — envoie un OTP par email',
+  })
   @ApiBody({ type: ForgotPasswordDto })
-  @ApiResponse({ status: 200, description: 'OTP sent if email exists' })
-  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+  @ApiResponse({ status: 200, description: "OTP envoyé si l'email existe" })
+  async forgotPassword(@Body() dto: ForgotPasswordDto): Promise<unknown> {
     return this.authService.forgotPassword(dto.email);
   }
 
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Reset password using OTP' })
+  @ApiOperation({ summary: "Réinitialiser le mot de passe avec l'OTP" })
   @ApiBody({ type: ResetPasswordDto })
-  @ApiResponse({ status: 200, description: 'Password reset successfully' })
-  @ApiResponse({ status: 401, description: 'Invalid or expired OTP' })
-  async resetPassword(@Body() dto: ResetPasswordDto) {
+  @ApiResponse({
+    status: 200,
+    description: 'Mot de passe réinitialisé avec succès',
+  })
+  @ApiResponse({ status: 401, description: 'OTP invalide ou expiré' })
+  async resetPassword(@Body() dto: ResetPasswordDto): Promise<unknown> {
     return this.authService.resetPassword({
       email: dto.email,
       otp: dto.otp,
@@ -94,10 +102,13 @@ export class AuthController {
   @Get('me')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Get current authenticated user' })
-  @ApiResponse({ status: 200, description: 'Current user data' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  getMe(@CurrentUser() user: unknown) {
+  @ApiOperation({ summary: "Récupérer l'utilisateur actuellement connecté" })
+  @ApiResponse({ status: 200, description: "Données de l'utilisateur courant" })
+  @ApiResponse({
+    status: 401,
+    description: 'Non autorisé — token manquant ou invalide',
+  })
+  getMe(@CurrentUser() user: JwtPayload): JwtPayload {
     return user;
   }
 }

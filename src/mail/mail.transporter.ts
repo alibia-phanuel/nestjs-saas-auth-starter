@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 import { createTransport, Transporter } from 'nodemailer';
 import type { SentMessageInfo } from 'nodemailer/lib/smtp-transport';
 
@@ -11,5 +10,5 @@ export const createTransporter = (): Transporter<SentMessageInfo> => {
       user: process.env.SMTP_USER ?? '',
       pass: process.env.SMTP_PASS ?? '',
     },
-  });
+  }) as Transporter<SentMessageInfo>;
 };

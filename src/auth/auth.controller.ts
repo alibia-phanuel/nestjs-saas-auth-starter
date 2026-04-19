@@ -23,7 +23,9 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
-import type { JwtPayload } from './auth.service';
+import type { JwtPayload } from './types/auth.types';
+import { Enable2faDto } from './dto/enable-2fa.dto';
+import { Verify2faDto } from './dto/verify-2fa.dto';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -110,5 +112,65 @@ export class AuthController {
   })
   getMe(@CurrentUser() user: JwtPayload): JwtPayload {
     return user;
+  }
+
+  // ── POST /auth/2fa/setup ───────────────────────
+
+  @Post('2fa/setup')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Generate 2FA QR code — scan with Google Authenticator',
+  })
+  @ApiResponse({ status: 200, description: 'Returns QR code and secret' })
+  async setup2FA(@CurrentUser() user: { id: string }) {
+    return this.authService.setup2FA(user.id);
+  }
+
+  // ── POST /auth/2fa/enable ──────────────────────
+
+  @Post('2fa/enable')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Enable 2FA after scanning QR code' })
+  @ApiBody({ type: Enable2faDto })
+  @ApiResponse({ status: 200, description: '2FA enabled' })
+  @ApiResponse({ status: 401, description: 'Invalid code' })
+  async enable2FA(
+    @CurrentUser() user: { id: string },
+    @Body() dto: Enable2faDto,
+  ) {
+    return this.authService.enable2FA(user.id, dto.code);
+  }
+
+  // ── POST /auth/2fa/disable ─────────────────────
+
+  @Post('2fa/disable')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Disable 2FA' })
+  @ApiBody({ type: Enable2faDto })
+  @ApiResponse({ status: 200, description: '2FA disabled' })
+  async disable2FA(
+    @CurrentUser() user: { id: string },
+    @Body() dto: Enable2faDto,
+  ) {
+    return this.authService.disable2FA(user.id, dto.code);
+  }
+
+  // ── POST /auth/2fa/verify ──────────────────────
+  // Appelé après login quand requiresTwoFactor: true
+
+  @Post('2fa/verify')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify 2FA code after login' })
+  @ApiBody({ type: Verify2faDto })
+  @ApiResponse({ status: 200, description: 'Returns JWT tokens' })
+  @ApiResponse({ status: 401, description: 'Invalid 2FA code' })
+  async verify2FA(@Body() dto: Verify2faDto) {
+    return this.authService.verify2FA(dto);
   }
 }

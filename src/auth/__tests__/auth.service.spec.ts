@@ -8,7 +8,24 @@ import { AuthService } from '../auth.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { I18nService } from '../../i18n/i18n.service';
 import * as bcrypt from 'bcryptjs';
+import { TwoFactorService } from '../two-factor.service';
 
+const mockTwoFactorService = {
+  setup: jest.fn().mockResolvedValue({
+    secret: 'JBSWY3DPEHPK3PXP',
+    otpauthUrl: 'otpauth://totp/...',
+    qrCode: 'data:image/png;base64,...',
+  }),
+  enable: jest.fn().mockResolvedValue({
+    key: 'auth.2fa_enabled',
+    message: 'auth.2fa_enabled',
+  }),
+  disable: jest.fn().mockResolvedValue({
+    key: 'auth.2fa_disabled',
+    message: 'auth.2fa_disabled',
+  }),
+  verify: jest.fn().mockResolvedValue(true),
+};
 const mockPrismaService = {
   user: {
     findUnique: jest.fn(),
@@ -48,6 +65,7 @@ describe('AuthService', () => {
         { provide: I18nService, useValue: mockI18nService },
         { provide: JwtService, useValue: mockJwtService },
         { provide: EventEmitter2, useValue: mockEventEmitter },
+        { provide: TwoFactorService, useValue: mockTwoFactorService },
       ],
     }).compile();
 
@@ -446,6 +464,108 @@ describe('AuthService', () => {
           otp: '123456',
           newPassword: 'NewSecurePass123!',
         }),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  // ── setup2FA() ───────────────────────────────────
+
+  describe('setup2FA()', () => {
+    it('should return otpauth url and qr code', async () => {
+      mockTwoFactorService.setup.mockResolvedValue({
+        secret: 'JBSWY3DPEHPK3PXP',
+        otpauthUrl: 'otpauth://totp/nestjs-saas-starter:phanuel@example.com',
+        qrCode: 'data:image/png;base64,abc123',
+      });
+
+      const result = await service.setup2FA('uuid-123');
+      expect(result).toHaveProperty('qrCode');
+      expect(result).toHaveProperty('secret');
+      expect(result).toHaveProperty('otpauthUrl');
+    });
+
+    it('should throw if user not found', async () => {
+      mockTwoFactorService.setup.mockRejectedValue(new UnauthorizedException());
+      await expect(service.setup2FA('unknown-uuid')).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+  });
+
+  // ── enable2FA() ───────────────────────────────────
+
+  describe('enable2FA()', () => {
+    it('should enable 2FA when code is valid', async () => {
+      mockTwoFactorService.enable.mockResolvedValue({
+        key: 'auth.2fa_enabled',
+        message: 'auth.2fa_enabled',
+      });
+      const result = await service.enable2FA('uuid-123', '847392');
+      expect(result).toHaveProperty('key', 'auth.2fa_enabled');
+    });
+
+    it('should throw if code is invalid', async () => {
+      mockTwoFactorService.enable.mockRejectedValue(
+        new UnauthorizedException(),
+      );
+      await expect(service.enable2FA('uuid-123', '000000')).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+  });
+
+  // ── disable2FA() ──────────────────────────────────
+
+  describe('disable2FA()', () => {
+    it('should disable 2FA when code is valid', async () => {
+      mockTwoFactorService.disable.mockResolvedValue({
+        key: 'auth.2fa_disabled',
+        message: 'auth.2fa_disabled',
+      });
+      const result = await service.disable2FA('uuid-123', '847392');
+      expect(result).toHaveProperty('key', 'auth.2fa_disabled');
+    });
+  });
+
+  // ── verify2FA() ───────────────────────────────────
+  describe('verify2FA()', () => {
+    const hashedPassword = bcrypt.hashSync('SecurePass123!', 10);
+
+    it('should return tokens when 2FA code is valid', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'uuid-123',
+        email: 'phanuel@example.com',
+        password: hashedPassword,
+        status: 'ACTIVE',
+        emailVerified: true,
+        twoFactorEnabled: true,
+        twoFactorSecret: 'JBSWY3DPEHPK3PXP',
+      });
+      prisma.refreshToken.create.mockResolvedValue({});
+      mockTwoFactorService.verify.mockResolvedValue(true);
+      mockJwtService.signAsync
+        .mockResolvedValueOnce('access-token')
+        .mockResolvedValueOnce('refresh-token');
+
+      const result = await service.verify2FA({
+        email: 'phanuel@example.com',
+        code: '847392',
+      });
+      expect(result).toHaveProperty('accessToken');
+      expect(result).toHaveProperty('refreshToken');
+    });
+
+    it('should throw if 2FA code is invalid', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'uuid-123',
+        email: 'phanuel@example.com',
+        twoFactorEnabled: true,
+        twoFactorSecret: 'JBSWY3DPEHPK3PXP',
+      });
+      mockTwoFactorService.verify.mockResolvedValue(false);
+
+      await expect(
+        service.verify2FA({ email: 'phanuel@example.com', code: '000000' }),
       ).rejects.toThrow(UnauthorizedException);
     });
   });

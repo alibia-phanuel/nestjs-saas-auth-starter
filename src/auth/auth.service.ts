@@ -12,6 +12,9 @@ import { SignupDto } from './dto/signup.dto';
 import { LoginDto } from './dto/login.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { User, UserStatus } from '../generated/prisma/client.js';
+import { TwoFactorService } from './two-factor.service';
+import { Verify2faDto } from './dto/verify-2fa.dto';
+import { AuthTokens, JwtPayload, Setup2FAResult } from './types/auth.types';
 
 // ── Types ────────────────────────────────────────────
 
@@ -25,15 +28,10 @@ type SafeUser = Omit<
   | 'resetTokenExpiry'
 >;
 
-export interface AuthTokens {
-  accessToken: string;
-  refreshToken: string;
-}
-
-export interface JwtPayload {
-  sub: string;
-  email: string;
-}
+// Type de retour du login — normal ou 2FA requis
+type LoginResponse =
+  | ({ key: string; message: string } & AuthTokens)
+  | { key: string; message: string; requiresTwoFactor: true; email: string };
 
 // ─────────────────────────────────────────────────────
 
@@ -44,17 +42,16 @@ export class AuthService {
     private readonly i18n: I18nService,
     private readonly jwt: JwtService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly twoFactor: TwoFactorService,
   ) {}
 
   // ── HELPERS OTP ──────────────────────────────────
 
   private generateOtp(): string {
-    // Génère un code à 6 chiffres
     return Math.floor(100000 + Math.random() * 900000).toString();
   }
 
   private getOtpExpiry(): Date {
-    // OTP valide 15 minutes
     const expiry = new Date();
     expiry.setMinutes(expiry.getMinutes() + 15);
     return expiry;
@@ -99,7 +96,6 @@ export class AuthService {
       },
     });
 
-    // Rappel Module 20 — Event Emitter découplé
     this.eventEmitter.emit('user.created', {
       email: dto.email,
       firstName: dto.firstName,
@@ -125,21 +121,18 @@ export class AuthService {
       );
     }
 
-    // OTP correct ?
     if (user.otpCode !== dto.otp) {
       throw new UnauthorizedException(
         this.i18n.createResponse('auth.otp_invalid'),
       );
     }
 
-    // OTP expiré ?
     if (!user.otpExpiresAt || user.otpExpiresAt < new Date()) {
       throw new UnauthorizedException(
         this.i18n.createResponse('auth.otp_invalid'),
       );
     }
 
-    // Active le compte
     await this.prisma.user.update({
       where: { id: user.id },
       data: {
@@ -162,8 +155,6 @@ export class AuthService {
       where: { email },
     });
 
-    // Sécurité : même réponse si l'email n'existe pas
-    // On ne révèle pas si l'email est enregistré ou non
     if (!user) {
       return this.i18n.createResponse('auth.password_reset_sent');
     }
@@ -202,14 +193,12 @@ export class AuthService {
       );
     }
 
-    // OTP correct ?
     if (user.otpCode !== dto.otp) {
       throw new UnauthorizedException(
         this.i18n.createResponse('auth.otp_invalid'),
       );
     }
 
-    // OTP expiré ?
     if (!user.otpExpiresAt || user.otpExpiresAt < new Date()) {
       throw new UnauthorizedException(
         this.i18n.createResponse('auth.otp_invalid'),
@@ -232,9 +221,7 @@ export class AuthService {
 
   // ── LOGIN ───────────────────────────────────────
 
-  async login(
-    dto: LoginDto,
-  ): Promise<{ key: string; message: string } & AuthTokens> {
+  async login(dto: LoginDto): Promise<LoginResponse> {
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
     });
@@ -266,6 +253,16 @@ export class AuthService {
       throw new UnauthorizedException(
         this.i18n.createResponse('auth.email_not_verified'),
       );
+    }
+
+    // Si 2FA activé → on ne retourne PAS les tokens
+    // Le frontend appelle POST /auth/2fa/verify ensuite
+    if (user.twoFactorEnabled) {
+      return {
+        ...this.i18n.createResponse('auth.2fa_required'),
+        requiresTwoFactor: true as const,
+        email: user.email,
+      };
     }
 
     const tokens = await this.generateTokens(user.id, user.email);
@@ -341,5 +338,67 @@ export class AuthService {
     await this.prisma.refreshToken.create({
       data: { token, userId, expiresAt },
     });
+  }
+
+  // ── 2FA SETUP ────────────────────────────────────
+
+  async setup2FA(userId: string): Promise<Setup2FAResult> {
+    return this.twoFactor.setup(userId);
+  }
+
+  // ── 2FA ENABLE ───────────────────────────────────
+
+  async enable2FA(
+    userId: string,
+    code: string,
+  ): Promise<{ key: string; message: string }> {
+    return this.twoFactor.enable(userId, code);
+  }
+
+  // ── 2FA DISABLE ──────────────────────────────────
+
+  async disable2FA(
+    userId: string,
+    code: string,
+  ): Promise<{ key: string; message: string }> {
+    return this.twoFactor.disable(userId, code);
+  }
+
+  // ── 2FA VERIFY LOGIN ─────────────────────────────
+
+  async verify2FA(
+    dto: Verify2faDto,
+  ): Promise<{ key: string; message: string } & AuthTokens> {
+    const user = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+      select: {
+        id: true,
+        email: true,
+        twoFactorEnabled: true,
+        twoFactorSecret: true,
+        status: true,
+        emailVerified: true,
+      },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException(
+        this.i18n.createResponse('auth.invalid_credentials'),
+      );
+    }
+
+    const isValid = await this.twoFactor.verify(dto.email, dto.code);
+
+    if (!isValid) {
+      throw new UnauthorizedException(
+        this.i18n.createResponse('auth.2fa_invalid'),
+      );
+    }
+
+    const tokens = await this.generateTokens(user.id, user.email);
+    await this.saveRefreshToken(user.id, tokens.refreshToken);
+
+    const response = this.i18n.createResponse('auth.login_success');
+    return { key: response.key, message: response.message, ...tokens };
   }
 }

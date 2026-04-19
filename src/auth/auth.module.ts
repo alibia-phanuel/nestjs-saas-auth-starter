@@ -6,7 +6,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { PrismaModule } from '../prisma/prisma.module';
-
+import { TwoFactorService } from './two-factor.service';
 @Module({
   imports: [
     PrismaModule,
@@ -15,7 +15,7 @@ import { PrismaModule } from '../prisma/prisma.module';
     EventEmitterModule.forRoot(), // ✅
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
-  exports: [AuthService, JwtStrategy],
+  providers: [AuthService, JwtStrategy, TwoFactorService],
+  exports: [AuthService, JwtStrategy, TwoFactorService],
 })
 export class AuthModule {}

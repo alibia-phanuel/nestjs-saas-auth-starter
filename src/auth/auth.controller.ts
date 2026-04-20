@@ -26,11 +26,19 @@ import { CurrentUser } from './decorators/current-user.decorator';
 import type { JwtPayload } from './types/auth.types';
 import { Enable2faDto } from './dto/enable-2fa.dto';
 import { Verify2faDto } from './dto/verify-2fa.dto';
+import { Res } from '@nestjs/common';
+import type { Response } from 'express';
+import { GoogleAuthGuard } from './guards/google-auth.guard';
+import { OAuthService } from './oauth.service';
+import type { GoogleUser } from './strategies/google.strategy';
 
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly oauthService: OAuthService,
+  ) {}
 
   @Post('signup')
   @HttpCode(HttpStatus.CREATED)
@@ -172,5 +180,33 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Invalid 2FA code' })
   async verify2FA(@Body() dto: Verify2faDto) {
     return this.authService.verify2FA(dto);
+  }
+
+  // ── GET /auth/google ───────────────────────────
+  // Redirige vers Google pour l'authentification
+
+  @Get('google')
+  @UseGuards(GoogleAuthGuard)
+  @ApiOperation({ summary: 'Login with Google — redirects to Google OAuth' })
+  @ApiResponse({ status: 302, description: 'Redirects to Google' })
+  googleAuth(): void {
+    // Passport gère la redirection automatiquement
+  }
+
+  // ── GET /auth/google/callback ──────────────────
+  // Google redirige ici après authentification
+
+  @Get('google/callback')
+  @UseGuards(GoogleAuthGuard)
+  @ApiOperation({ summary: 'Google OAuth callback' })
+  @ApiResponse({ status: 200, description: 'Returns JWT tokens' })
+  async googleCallback(
+    @CurrentUser() user: GoogleUser,
+    @Res() res: Response,
+  ): Promise<void> {
+    const tokens = await this.oauthService.handleGoogleLogin(user);
+    // En production : redirige vers le frontend avec les tokens
+    // Ex: res.redirect(`https://yourapp.com/auth/callback?token=${tokens.accessToken}`)
+    res.json(tokens);
   }
 }

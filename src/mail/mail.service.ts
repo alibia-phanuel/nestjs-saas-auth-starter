@@ -8,24 +8,12 @@ import {
   verifyOtpEmailTemplate,
   resetOtpEmailTemplate,
 } from './templates/email.templates';
-
-interface UserCreatedEvent {
-  email: string;
-  firstName?: string;
-  otp: string;
-}
-
-interface PasswordResetEvent {
-  email: string;
-  firstName?: string;
-  otp: string;
-}
-
-interface SendMailOptions {
-  to: string;
-  subject: string;
-  html: string;
-}
+import type {
+  SendMailOptions,
+  UserCreatedEvent,
+  PasswordResetEvent,
+  OAuthUserCreatedEvent,
+} from './types/mail.types';
 
 @Injectable()
 export class MailService {
@@ -78,6 +66,16 @@ export class MailService {
       to: payload.email,
       subject: '🔑 Réinitialisation de votre mot de passe',
       html: resetOtpEmailTemplate(name, payload.otp),
+    });
+  }
+  @OnEvent('user.oauth.created')
+  async handleOAuthUserCreated(payload: OAuthUserCreatedEvent): Promise<void> {
+    const name = payload.firstName ?? 'Utilisateur';
+
+    await this.sendMail({
+      to: payload.email,
+      subject: '🚀 Bienvenue sur nestjs-saas-starter !',
+      html: welcomeEmailTemplate(name),
     });
   }
 }

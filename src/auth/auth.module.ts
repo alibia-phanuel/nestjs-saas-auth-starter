@@ -10,6 +10,9 @@ import { GoogleStrategy } from './strategies/google.strategy';
 import { TwoFactorService } from './two-factor.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { I18nModule } from '../i18n/i18n.module';
+import { ApiKeyService } from './api-key.service';
+import { ApiKeyStrategy } from './strategies/api-key.strategy';
+import { ApiKeyController } from './api-key.controller';
 @Module({
   imports: [
     PrismaModule,
@@ -18,12 +21,14 @@ import { I18nModule } from '../i18n/i18n.module';
     JwtModule.register({}),
     EventEmitterModule.forRoot(),
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, ApiKeyController],
   providers: [
     AuthService,
     OAuthService,
+    ApiKeyService,
     JwtStrategy,
     GoogleStrategy,
+    ApiKeyStrategy,
     TwoFactorService,
   ],
   exports: [
@@ -32,6 +37,8 @@ import { I18nModule } from '../i18n/i18n.module';
     JwtStrategy,
     GoogleStrategy,
     TwoFactorService,
+    ApiKeyService,
+    ApiKeyStrategy,
   ],
 })
 export class AuthModule {}

@@ -1,58 +1,58 @@
 /**
  * ============================================================
- * DTO — VerifyOtpDto (Vérification du code OTP reçu par email)
+ * DTO — Verify2faDto (Vérification du code de double authentification)
  * ============================================================
  *
  * Ce fichier définit le DTO utilisé lors de la vérification
- * du code OTP envoyé par email après l'inscription.
+ * du code 2FA après une tentative de connexion.
  *
- * 💡 C'est quoi un OTP ?
- *    OTP = One-Time Password (mot de passe à usage unique).
- *    C'est un code à 6 chiffres généré aléatoirement,
- *    envoyé par email, valable une seule fois et pendant
- *    une durée limitée (ex: 10 minutes).
+ * 💡 Rappel : quand le 2FA est activé, la connexion se fait
+ *    en deux étapes distinctes :
  *
- * 🔄 Flux de vérification OTP après inscription :
+ * 🔄 Flux de connexion avec 2FA activé :
  *    ─────────────────────────────────────────────────────
- *    1. L'utilisateur s'inscrit via POST /auth/signup
- *       → le serveur génère un OTP et l'envoie par email
- *       → le compte est créé avec le statut PENDING
- *    2. L'utilisateur reçoit l'email avec le code OTP
- *    3. Il envoie POST /auth/verify-otp avec ce DTO
- *       → le serveur vérifie l'email + l'OTP
- *    4. Si valide → le compte passe de PENDING à ACTIVE
- *       emailVerified passe à true et l'OTP est effacé
+ *    Étape 1 — LoginDto :
+ *       POST /auth/login { email, password }
+ *       → le serveur vérifie les identifiants
+ *       → comme le 2FA est activé, il retourne un message
+ *         demandant le code Google Authenticator
+ *         (pas de tokens JWT encore)
+ *
+ *    Étape 2 — Verify2faDto (ce DTO) :
+ *       POST /auth/2fa/verify { email, code }
+ *       → le serveur vérifie le code TOTP
+ *       → si valide → retourne accessToken + refreshToken
  *    ─────────────────────────────────────────────────────
  *
  *    Exemple de body JSON attendu :
  *    ─────────────────────────────────────────
- *    POST /auth/verify-otp
+ *    POST /auth/2fa/verify
  *    {
  *      "email": "phanuel@example.com",
- *      "otp": "847392"
+ *      "code": "847392"
  *    }
  *    ─────────────────────────────────────────
  *
- * 💡 Différence avec Verify2faDto :
- *    - VerifyOtpDto  → vérifie un code envoyé par EMAIL
- *                      pour activer le compte à l'inscription
- *                      ou réinitialiser le mot de passe
- *    - Verify2faDto  → vérifie un code généré par une APPLICATION
- *                      (Google Authenticator) à chaque connexion
+ * 💡 Différence avec Enable2faDto :
+ *    - Enable2faDto  → utilisé UNE SEULE FOIS pour activer
+ *                      le 2FA (nécessite d'être connecté)
+ *    - Verify2faDto  → utilisé À CHAQUE CONNEXION pour
+ *                      valider le code (avant d'être connecté)
  *
  * 🛡️ Sécurité :
- *    L'OTP est à usage unique — il est effacé de la base
- *    dès qu'il est utilisé avec succès. S'il est expiré,
- *    l'utilisateur doit en demander un nouveau.
+ *    Le code TOTP change toutes les 30 secondes et n'est
+ *    valable qu'une seule fois. Une fenêtre de tolérance
+ *    d'environ ±30 secondes est généralement acceptée
+ *    pour compenser les décalages d'horloge.
  * ============================================================
  */
 
 import { IsEmail, IsNotEmpty, IsString, Matches } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
-export class VerifyOtpDto {
+export class Verify2faDto {
   /**
-   * email — Adresse email du compte à activer
+   * email — Adresse email du compte en cours de connexion
    *
    * 🛡️ Règles de validation :
    *    - @IsEmail()    → doit être une adresse email valide
@@ -62,10 +62,9 @@ export class VerifyOtpDto {
    *    - Email invalide → clé 'validation.invalid_email'
    *    - Champ vide     → clé 'validation.required'
    *
-   * 💡 L'email est requis pour croiser l'OTP avec le bon
-   *    compte en base de données. Deux utilisateurs différents
-   *    pourraient théoriquement avoir le même OTP au même
-   *    moment — l'email garantit l'unicité de la vérification.
+   * 💡 L'email est requis ici car cette route est accessible
+   *    sans être connecté (pas de JWT encore). Il permet
+   *    d'identifier le compte dont on veut vérifier le 2FA.
    *
    * 📄 Swagger : champ obligatoire avec un exemple d'email
    */
@@ -78,7 +77,7 @@ export class VerifyOtpDto {
   email!: string;
 
   /**
-   * otp — Code à 6 chiffres reçu par email
+   * code — Code TOTP à 6 chiffres
    *
    * 🛡️ Règles de validation :
    *    - @IsString()   → doit être une chaîne de caractères
@@ -95,23 +94,24 @@ export class VerifyOtpDto {
    *    → Rejette : "84739" (5 chiffres), "84739a" (lettre),
    *                " 847392" (espace), "8473921" (7 chiffres)
    *
-   * 💡 L'OTP est traité comme une string et non un number
-   *    car il peut commencer par 0 (ex: "047392") — un nombre
-   *    perdrait ce zéro initial et fausserait la comparaison.
+   * 💡 Différence avec @Length(6,6) utilisé dans Enable2faDto :
+   *    @Matches(/^\d{6}$/) est plus strict car il vérifie
+   *    aussi que tous les caractères sont bien des chiffres,
+   *    pas uniquement la longueur.
    *
    * 💬 Message d'erreur personnalisé via i18n :
-   *    - Code invalide → clé 'validation.invalid_otp'
+   *    - Code invalide → clé 'validation.invalid_2fa_code'
    *
-   * 📄 Swagger : champ obligatoire avec un exemple de code OTP
+   * 📄 Swagger : champ obligatoire avec un exemple de code TOTP
    */
   @ApiProperty({
     example: '847392',
-    description: 'Code OTP reçu par e-mail',
+    description: 'Code TOTP généré par Google Authenticator',
   })
   @IsString()
   @IsNotEmpty({ message: 'validation.required' })
   @Matches(/^\d{6}$/, {
-    message: 'validation.invalid_otp',
+    message: 'validation.invalid_2fa_code',
   })
-  otp!: string;
+  code!: string;
 }

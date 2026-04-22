@@ -1,13 +1,14 @@
 import { Controller, Get, Res } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
 import express from 'express';
+
 @ApiExcludeController()
 @Controller()
 export class AppController {
   @Get()
   getHome(@Res() res: express.Response): void {
     res.send(`<!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
@@ -36,7 +37,6 @@ export class AppController {
       overflow-x: hidden;
     }
 
-    /* ── Animated background ── */
     .bg-grid {
       position: fixed;
       inset: 0;
@@ -71,7 +71,6 @@ export class AppController {
       50% { opacity: 1; transform: translateX(-50%) scale(1.1); }
     }
 
-    /* ── Layout ── */
     .container {
       position: relative;
       z-index: 1;
@@ -80,7 +79,6 @@ export class AppController {
       padding: 60px 24px;
     }
 
-    /* ── Header ── */
     .header {
       text-align: center;
       margin-bottom: 56px;
@@ -139,7 +137,6 @@ export class AppController {
       animation: fadeDown 0.8s ease 0.3s both;
     }
 
-    /* ── CTA Buttons ── */
     .cta-group {
       display: flex;
       gap: 12px;
@@ -185,7 +182,6 @@ export class AppController {
       background: var(--bg3);
     }
 
-    /* ── Stack pills ── */
     .stack-row {
       display: flex;
       gap: 8px;
@@ -210,7 +206,6 @@ export class AppController {
       color: var(--text);
     }
 
-    /* ── Feature Grid ── */
     .section-title {
       font-size: 11px;
       font-weight: 600;
@@ -284,7 +279,6 @@ export class AppController {
       flex-shrink: 0;
     }
 
-    /* ── Status bar ── */
     .status-bar {
       background: var(--bg2);
       border: 1px solid var(--border);
@@ -315,7 +309,6 @@ export class AppController {
       animation: pulse 2s ease-in-out infinite;
     }
 
-    /* ── Author ── */
     .author {
       text-align: center;
       padding: 32px;
@@ -350,7 +343,6 @@ export class AppController {
 
     .author-links a:hover { color: var(--red); }
 
-    /* ── Progress bar ── */
     .progress-wrap {
       background: var(--bg2);
       border: 1px solid var(--border);
@@ -382,7 +374,6 @@ export class AppController {
       transition: width 1.2s ease;
     }
 
-    /* ── Progress meta row ── */
     .progress-meta {
       display: flex;
       justify-content: space-between;
@@ -408,7 +399,7 @@ export class AppController {
 
   <div class="container">
 
-    <!-- Header -->
+    <!-- En-tête -->
     <div class="header">
       <div class="badge">
         <div class="pulse-dot"></div>
@@ -416,11 +407,11 @@ export class AppController {
       </div>
       <h1>nestjs-<span>saas</span>-starter</h1>
       <p class="subtitle">
-        Enterprise-grade SaaS starter kit — Auth, RBAC,
-        Multi-tenancy, GraphQL & TDD
+        Kit de démarrage SaaS professionnel — Auth, RBAC,
+        Multi-tenant, GraphQL &amp; TDD
       </p>
       <div class="cta-group">
-        <a class="btn btn-primary" href="/api/docs">📄 API Docs</a>
+        <a class="btn btn-primary" href="/api/docs">📄 Documentation API</a>
         <a class="btn btn-outline" href="https://github.com/alibia-phanuel/nestjs-saas-auth-starter" target="_blank">⭐ GitHub</a>
         <a class="btn btn-outline" href="https://www.linkedin.com/in/phanuel-tsopze-8a33a52a4/" target="_blank">💼 LinkedIn</a>
         <a class="btn btn-outline" href="https://phanuel-alibia.com/" target="_blank">🌐 Portfolio</a>
@@ -438,10 +429,10 @@ export class AppController {
       <span class="pill">Jest</span>
     </div>
 
-    <!-- Progress -->
+    <!-- Progression -->
     <div class="progress-wrap">
       <div class="progress-header">
-        <span>Build progress</span>
+        <span>Avancement du projet</span>
         <span id="progress-label" style="color:var(--red)">...</span>
       </div>
       <div class="progress-bar">
@@ -453,57 +444,57 @@ export class AppController {
       </div>
     </div>
 
-    <!-- Status -->
+    <!-- Statut -->
     <div class="status-bar">
       <div class="status-item">
         <div class="status-dot"></div>
-        API Running
+        API en ligne
       </div>
-      <div class="status-item">✅ Prisma Connected</div>
-      <div class="status-item">✅ i18n Ready (EN / FR)</div>
-      <div class="status-item">✅ Swagger at /api/docs</div>
+      <div class="status-item">✅ Prisma connecté</div>
+      <div class="status-item">✅ i18n actif (FR / EN)</div>
+      <div class="status-item">✅ Swagger sur /api/docs</div>
       <div class="status-item">v1.0.0</div>
     </div>
 
-    <!-- Features -->
-    <p class="section-title">Features</p>
+    <!-- Fonctionnalités -->
+    <p class="section-title">Fonctionnalités</p>
     <div class="grid">
       <div class="card" style="animation-delay:0.1s">
         <div class="card-header">
           <span class="card-icon">🔐</span>
-          <span class="card-title">Authentication</span>
+          <span class="card-title">Authentification</span>
         </div>
         <ul>
-          <li>Signup / Login / Logout</li>
+          <li>Inscription / Connexion / Déconnexion</li>
           <li>JWT (Access + Refresh Token)</li>
-          <li>2FA (Google Authenticator)</li>
+          <li>Double authentification (Google Authenticator)</li>
           <li>OAuth (Google + Apple)</li>
-          <li>API Key</li>
+          <li>Clé API</li>
         </ul>
       </div>
 
       <div class="card" style="animation-delay:0.2s">
         <div class="card-header">
           <span class="card-icon">👥</span>
-          <span class="card-title">User Management</span>
+          <span class="card-title">Gestion des utilisateurs</span>
         </div>
         <ul>
           <li>CRUD complet</li>
-          <li>RBAC (Roles + Permissions)</li>
-          <li>Email activation</li>
-          <li>Profile management</li>
+          <li>RBAC (Rôles + Permissions)</li>
+          <li>Activation par e-mail</li>
+          <li>Gestion du profil</li>
         </ul>
       </div>
 
       <div class="card" style="animation-delay:0.3s">
         <div class="card-header">
           <span class="card-icon">🏢</span>
-          <span class="card-title">SaaS Ready</span>
+          <span class="card-title">Prêt pour le SaaS</span>
         </div>
         <ul>
-          <li>Multi-tenancy</li>
-          <li>Plans (Free, Pro, Enterprise)</li>
-          <li>Member invitations</li>
+          <li>Multi-tenant</li>
+          <li>Plans (Gratuit, Pro, Entreprise)</li>
+          <li>Invitations de membres</li>
         </ul>
       </div>
 
@@ -515,41 +506,41 @@ export class AppController {
         <ul>
           <li>REST (Swagger)</li>
           <li>GraphQL (Apollo)</li>
-          <li>i18n Message Keys</li>
+          <li>Clés de messages i18n</li>
         </ul>
       </div>
 
       <div class="card" style="animation-delay:0.5s">
         <div class="card-header">
           <span class="card-icon">🧪</span>
-          <span class="card-title">TDD & Quality</span>
+          <span class="card-title">TDD &amp; Qualité</span>
         </div>
         <ul>
-          <li>Test coverage &gt; 80%</li>
-          <li>Red → Green → Refactor</li>
-          <li>Unit + E2E tests</li>
+          <li>Couverture de tests &gt; 80%</li>
+          <li>Rouge → Vert → Refactorisation</li>
+          <li>Tests unitaires + E2E</li>
         </ul>
       </div>
 
       <div class="card" style="animation-delay:0.6s">
         <div class="card-header">
           <span class="card-icon">🚀</span>
-          <span class="card-title">Production Ready</span>
+          <span class="card-title">Prêt pour la production</span>
         </div>
         <ul>
           <li>Docker Compose</li>
-          <li>Rate limiting</li>
-          <li>Structured logging</li>
-          <li>CI/CD ready</li>
+          <li>Limitation de débit</li>
+          <li>Journalisation structurée</li>
+          <li>CI/CD intégrable</li>
         </ul>
       </div>
     </div>
 
-    <!-- Author -->
+    <!-- Auteur -->
     <div class="author">
       <div class="author-name">Tsopze Nekdem Phanuel Arsene</div>
       <div style="font-size:13px;color:var(--muted)">
-        Building in public — 14 days challenge
+        Construction en public — Défi 14 jours
       </div>
       <div class="author-links">
         <a href="https://www.linkedin.com/in/phanuel-tsopze-8a33a52a4/" target="_blank">💼 LinkedIn</a>
@@ -568,7 +559,7 @@ export class AppController {
       /* ─────────── */
 
       const END_DATE = new Date(START_DATE);
-     END_DATE.setDate(END_DATE.getDate() + TOTAL_DAYS - 1); // ✅ 14 jours inclusifs
+      END_DATE.setDate(END_DATE.getDate() + TOTAL_DAYS - 1);
 
       function pad(n) {
         return String(n).padStart(2, '0');
@@ -582,20 +573,20 @@ export class AppController {
 
         /* --- avant le début --- */
         if (elapsed < 0) {
-          document.getElementById('badge-text').textContent     = 'In active development — Day 0 / ' + TOTAL_DAYS;
-          document.getElementById('progress-label').textContent = 'Day 0 / ' + TOTAL_DAYS + ' — 0%';
-          document.getElementById('days-remaining').textContent = '⏳ Challenge not started yet';
-          document.getElementById('live-timer').textContent     = '🕐 Starts soon';
+          document.getElementById('badge-text').textContent     = 'En développement actif — Jour 0 / ' + TOTAL_DAYS;
+          document.getElementById('progress-label').textContent = 'Jour 0 / ' + TOTAL_DAYS + ' — 0%';
+          document.getElementById('days-remaining').textContent = '⏳ Défi pas encore commencé';
+          document.getElementById('live-timer').textContent     = '🕐 Démarre bientôt';
           document.getElementById('progress-fill').style.width  = '0%';
           return;
         }
 
         /* --- après la fin --- */
         if (remaining <= 0) {
-          document.getElementById('badge-text').textContent     = 'Challenge completed 🎉';
-          document.getElementById('progress-label').textContent = 'Day ' + TOTAL_DAYS + ' / ' + TOTAL_DAYS + ' — 100%';
-          document.getElementById('days-remaining').textContent = '🎉 Challenge completed!';
-          document.getElementById('live-timer').textContent     = '✅ Done';
+          document.getElementById('badge-text').textContent     = 'Défi terminé 🎉';
+          document.getElementById('progress-label').textContent = 'Jour ' + TOTAL_DAYS + ' / ' + TOTAL_DAYS + ' — 100%';
+          document.getElementById('days-remaining').textContent = '🎉 Défi accompli !';
+          document.getElementById('live-timer').textContent     = '✅ Terminé';
           document.getElementById('progress-fill').style.width  = '100%';
           return;
         }
@@ -612,20 +603,20 @@ export class AppController {
 
         /* --- DOM --- */
         document.getElementById('badge-text').textContent =
-          'In active development — Day ' + currentDay + ' / ' + TOTAL_DAYS;
+          'En développement actif — Jour ' + currentDay + ' / ' + TOTAL_DAYS;
 
         document.getElementById('progress-fill').style.width =
           pct.toFixed(1) + '%';
 
         document.getElementById('progress-label').textContent =
-          'Day ' + currentDay + ' / ' + TOTAL_DAYS +
+          'Jour ' + currentDay + ' / ' + TOTAL_DAYS +
           ' — ' + Math.round(pct) + '%';
 
         document.getElementById('days-remaining').textContent =
-          '⏳ ' + daysLeft + ' day' + (daysLeft > 1 ? 's' : '') + ' remaining';
+          '⏳ ' + daysLeft + ' jour' + (daysLeft > 1 ? 's' : '') + ' restant' + (daysLeft > 1 ? 's' : '');
 
         document.getElementById('live-timer').textContent =
-          '🕐 Day ' + currentDay +
+          '🕐 Jour ' + currentDay +
           ' — ' + pad(hours) + 'h ' + pad(minutes) + 'm ' + pad(seconds) + 's';
       }
 

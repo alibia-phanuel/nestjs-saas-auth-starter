@@ -32,7 +32,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AppController } from './app.controller';
 import { AuthModule } from './auth/auth.module';
 import { MailModule } from './mail/mail.module';
-
+import { UsersModule } from './users/users.module';
 @Module({
   imports: [
     /**
@@ -54,6 +54,7 @@ import { MailModule } from './mail/mail.module';
     PrismaModule, // singleton PrismaService partagé entre les modules
     AuthModule, // inscription, connexion, JWT, OAuth, OTP
     MailModule, // emails transactionnels via événements @OnEvent()
+    UsersModule, // gestion des utilisateurs (CRUD, rôles, permissions)
   ],
   controllers: [AppController], // controller racine (healthcheck, route par défaut)
 })

@@ -30,8 +30,19 @@
  *       - La non-expiration du token (ignoreExpiration: false)
  *    4. validate() est appelée avec le payload décodé
  *    5. On vérifie que l'utilisateur existe toujours en base
- *    6. L'utilisateur est injecté dans req.user
+ *    6. L'utilisateur + ses rôles sont injectés dans req.user
  *    7. Le contrôleur y accède via @CurrentUser()
+ *    ─────────────────────────────────────────────────────
+ *
+ * 🔐 RBAC — Rôles et Permissions :
+ *    ─────────────────────────────────────────────────────
+ *    validate() retourne maintenant les rôles de l'utilisateur.
+ *    Ces rôles sont utilisés par RolesGuard pour vérifier si
+ *    l'utilisateur a accès à une route protégée par @Roles().
+ *
+ *    Exemple de flow RBAC :
+ *    GET /users → @Roles('admin') → RolesGuard vérifie
+ *    req.user.roles contient 'admin' → accès autorisé ou 403
  *    ─────────────────────────────────────────────────────
  *
  * 🔧 Configuration requise dans le fichier .env :
@@ -58,6 +69,26 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PrismaService } from '../../prisma/prisma.service';
 import { JwtPayload } from '../types/auth.types';
+
+// ── Type strict pour l'utilisateur retourné ───────────────
+// Ce type représente ce qui est injecté dans req.user
+// et accessible via @CurrentUser() dans les contrôleurs
+
+export interface AuthenticatedUser {
+  id: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  status: string;
+  emailVerified: boolean;
+  twoFactorEnabled: boolean;
+  roles: Array<{
+    role: {
+      name: string;
+      permissions: Array<{ action: string }>;
+    };
+  }>;
+}
 
 /**
  * JwtStrategy
@@ -134,23 +165,42 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
    *
    * 🔄 Étapes de validation :
    *    1. Recevoir le payload décodé { sub, email }
-   *    2. Chercher l'utilisateur en base via payload.sub (son id)
+   *    2. Chercher l'utilisateur + ses rôles en base
    *    3. Si introuvable → lancer une UnauthorizedException (401)
-   *    4. Retourner l'utilisateur → injecté dans req.user
+   *    4. Retourner l'utilisateur avec rôles → injecté dans req.user
+   *
+   * 🔐 Rôles inclus dans req.user :
+   *    Les rôles sont maintenant inclus dans l'objet retourné.
+   *    RolesGuard les utilise pour vérifier les permissions :
+   *
+   *    req.user.roles = [
+   *      {
+   *        role: {
+   *          name: 'admin',
+   *          permissions: [
+   *            { action: 'users:read' },
+   *            { action: 'users:delete' }
+   *          ]
+   *        }
+   *      }
+   *    ]
    *
    * @param payload - Le payload décodé du JWT contenant :
    *                  sub   → l'id de l'utilisateur (subject)
    *                  email → l'email de l'utilisateur
-   * @returns       - L'utilisateur complet depuis la base de données
+   * @returns       - L'utilisateur complet avec ses rôles
    * @throws UnauthorizedException si l'utilisateur n'existe plus
    */
-  async validate(payload: JwtPayload) {
+  async validate(payload: JwtPayload): Promise<AuthenticatedUser> {
     /**
      * Recherche de l'utilisateur en base via son id (payload.sub)
      *
      * select: { ... } → on ne récupère que les champs nécessaires
      * pour éviter de retourner des données sensibles (mot de passe,
      * secrets 2FA...) dans req.user accessible partout dans l'app.
+     *
+     * roles → inclus pour le RolesGuard (RBAC)
+     * Chaque UserRole inclut le Role avec ses permissions
      */
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
@@ -162,8 +212,25 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
         status: true,
         emailVerified: true,
         twoFactorEnabled: true,
-        // password: false → NON sélectionné (sécurité)
+        // password: false       → NON sélectionné (sécurité)
         // twoFactorSecret: false → NON sélectionné (sécurité)
+        // otpCode: false         → NON sélectionné (sécurité)
+
+        // ── RBAC — Rôles et permissions ──────────────
+        // Inclus pour que RolesGuard puisse vérifier
+        // les rôles sans requête supplémentaire en base
+        roles: {
+          include: {
+            role: {
+              select: {
+                name: true,
+                permissions: {
+                  select: { action: true },
+                },
+              },
+            },
+          },
+        },
       },
     });
 
@@ -172,8 +239,17 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       throw new UnauthorizedException();
     }
 
-    // Retourner l'utilisateur → Passport l'injecte dans req.user
+    // Retourner l'utilisateur avec ses rôles
+    // Passport l'injecte dans req.user
     // Accessible ensuite via @CurrentUser() dans les contrôleurs
+    //
+    // Exemple d'utilisation dans un contrôleur :
+    // @Get('profile')
+    // @UseGuards(JwtAuthGuard, RolesGuard)
+    // @Roles('admin')
+    // getProfile(@CurrentUser() user: AuthenticatedUser) {
+    //   return user; // contient id, email, roles...
+    // }
     return user;
   }
 }

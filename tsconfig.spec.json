@@ -1,9 +1,10 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "module": "commonjs",
-    "moduleResolution": "node",
-    "resolvePackageJsonExports": false
+    "rootDir": "src",
+        "types": ["jest", "node"],
+    "resolvePackageJsonExports": false,
+    "allowJs": true
   },
-  "include": ["src/**/*.ts", "test/**/*.ts"]
+  "exclude": ["node_modules", "dist", "test", "**/*.spec.ts", "**/*.test.ts","src/**/*.ts", "test/**/*.ts"] 
 }

@@ -33,6 +33,7 @@ import { AppController } from './app.controller';
 import { AuthModule } from './auth/auth.module';
 import { MailModule } from './mail/mail.module';
 import { UsersModule } from './users/users.module';
+import { OrganizationsModule } from './organizations/organizations.module';
 @Module({
   imports: [
     /**
@@ -49,7 +50,7 @@ import { UsersModule } from './users/users.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
-
+    OrganizationsModule, // gestion des organisations (CRUD, membres, rôles)
     I18nModule, // messages traduits (clés i18n → réponses HTTP)
     PrismaModule, // singleton PrismaService partagé entre les modules
     AuthModule, // inscription, connexion, JWT, OAuth, OTP

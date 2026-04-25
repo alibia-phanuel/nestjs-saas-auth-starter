@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /**
  * ============================================================
  * TEST — MailService
@@ -225,6 +226,101 @@ describe('MailService', () => {
       mockSendMail.mockRejectedValue(new Error('Échec de la connexion SMTP'));
 
       await expect(service.handlePasswordReset(payload)).resolves.not.toThrow();
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════
+  // 📌 handleOrganizationInvitation() — Invitation organisation
+  // ══════════════════════════════════════════════════════════
+
+  /**
+   * handleOrganizationInvitation() envoie 1 email contenant :
+   *   - le nom de l'organisation
+   *   - un lien d'invitation avec token
+   *   - une date d'expiration
+   *
+   * Ces tests vérifient :
+   *   - le nombre d'emails envoyés
+   *   - le sujet correct
+   *   - la présence du lien avec token
+   *   - la robustesse aux erreurs SMTP
+   */
+  describe('handleOrganizationInvitation()', () => {
+    /**
+     * Payload nominal représentant une invitation envoyée
+     * à un utilisateur pour rejoindre une organisation.
+     */
+    const payload = {
+      email: 'colleague@example.com',
+      organizationName: 'Acme Corp',
+      token: 'invite-token-123',
+      expiresAt: new Date('2030-01-01'),
+    };
+
+    // ── Cas 1 : Nominal → 1 email envoyé ─────────────────────
+    it("devrait envoyer un e-mail lors de l'événement « organization.invitation »", async () => {
+      mockSendMail.mockResolvedValue({ messageId: 'mock-id' });
+
+      await service.handleOrganizationInvitation(payload);
+
+      expect(mockSendMail).toHaveBeenCalledTimes(1);
+    });
+
+    // ── Cas 1a : Vérification du sujet ───────────────────────
+    it("devrait envoyer l'e-mail d'invitation avec le sujet correct", async () => {
+      mockSendMail.mockResolvedValue({ messageId: 'mock-id' });
+
+      await service.handleOrganizationInvitation(payload);
+
+      expect(mockSendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: payload.email,
+          subject: `🏢 Invitation à rejoindre ${payload.organizationName}`,
+        }),
+      );
+    });
+
+    // ── Cas 1b : Vérification du lien avec token ─────────────
+    /**
+     * On vérifie que le HTML contient bien le token d'invitation,
+     * ce qui garantit que le lien d'acceptation est correctement généré.
+     */
+    it("devrait inclure le token d'invitation dans le HTML", async () => {
+      mockSendMail.mockResolvedValue({ messageId: 'mock-id' });
+
+      await service.handleOrganizationInvitation(payload);
+
+      expect(mockSendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          html: expect.stringContaining(payload.token),
+        }),
+      );
+    });
+
+    // ── Cas 1c : Vérification du nom d'organisation ──────────
+    it("devrait inclure le nom de l'organisation dans le HTML", async () => {
+      mockSendMail.mockResolvedValue({ messageId: 'mock-id' });
+
+      await service.handleOrganizationInvitation(payload);
+
+      expect(mockSendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          html: expect.stringContaining(payload.organizationName),
+        }),
+      );
+    });
+
+    // ── Cas 2 : Erreur SMTP → pas de throw ───────────────────
+    /**
+     * Même principe que les autres handlers :
+     * un échec SMTP ne doit jamais casser le flux applicatif.
+     */
+    it('devrait ne pas throw si sendMail échoue', async () => {
+      mockSendMail.mockRejectedValue(new Error('SMTP failed'));
+
+      await expect(
+        service.handleOrganizationInvitation(payload),
+      ).resolves.not.toThrow();
     });
   });
 });

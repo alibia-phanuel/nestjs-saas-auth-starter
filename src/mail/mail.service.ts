@@ -7,33 +7,53 @@
  * transactionnels de l'application via SMTP (Nodemailer).
  *
  * 💡 Architecture événementielle :
- *    Le MailService n'est jamais injecté directement.
- *    Il écoute les événements émis par d'autres services via
- *    @OnEvent() et réagit de manière découplée.
- *    → Aucun couplage fort entre AuthService et MailService.
+ *    Le MailService n'est jamais appelé directement depuis
+ *    les contrôleurs ou services métier.
+ *
+ *    Il écoute des événements métier via @OnEvent() et réagit
+ *    de manière totalement découplée.
+ *
+ *    → Aucun couplage fort avec AuthService, OrganizationsService, etc.
+ *    → Facile à scaler, tester et maintenir
  *
  * 🔧 Dépendances :
- *    - createTransporter() → instance SMTP Nodemailer (mail.transporter)
- *    - email.templates     → fonctions de génération du HTML
- *    - Logger (NestJS)     → logs de succès et d'échec d'envoi
+ *    - createTransporter() → instance SMTP Nodemailer
+ *    - email.templates     → templates HTML centralisés
+ *    - Logger (NestJS)     → logs succès / erreurs
  *
  * 📋 Méthodes exposées (via événements) :
- *    - handleUserCreated()      → écoute « user.created »
- *    - handlePasswordReset()    → écoute « password.reset »
- *    - handleOAuthUserCreated() → écoute « user.oauth.created »
+ *    - handleUserCreated()             → « user.created »
+ *    - handlePasswordReset()           → « password.reset »
+ *    - handleOAuthUserCreated()        → « user.oauth.created »
+ *    - handleOrganizationInvitation()  → « organization.invitation »
  *
  * 🔒 Méthode privée :
  *    - sendMail() → wrapper SMTP avec gestion d'erreur centralisée
  *
  * 🔀 Emails envoyés par événement :
  *    ─────────────────────────────────────────────────────
- *    « user.created »       → welcome + OTP vérification (x2)
- *    « password.reset »     → OTP réinitialisation        (x1)
- *    « user.oauth.created » → welcome uniquement          (x1)
+ *    « user.created »
+ *        → Email de bienvenue
+ *        → Email OTP vérification              (x2)
+ *
+ *    « password.reset »
+ *        → Email OTP réinitialisation          (x1)
+ *
+ *    « user.oauth.created »
+ *        → Email de bienvenue uniquement       (x1)
+ *
+ *    « organization.invitation »
+ *        → Email d'invitation avec lien token  (x1)
  *    ─────────────────────────────────────────────────────
+ *
+ * 💡 Avantages de cette architecture :
+ *    ✔ découplage total (event-driven)
+ *    ✔ testabilité élevée (mock facile)
+ *    ✔ extensibilité (ajout d'événements sans casser l'existant)
+ *    ✔ résilience (erreurs SMTP isolées)
+ *
  * ============================================================
  */
-
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import type { Transporter } from 'nodemailer';
@@ -50,7 +70,8 @@ import type {
   PasswordResetEvent,
   OAuthUserCreatedEvent,
 } from './types/mail.types';
-
+import { organizationInvitationTemplate } from './templates/organization.templates';
+import { OrganizationInvitationEvent } from './types/organization.types';
 @Injectable()
 export class MailService {
   /**
@@ -203,6 +224,21 @@ export class MailService {
       to: payload.email,
       subject: '🚀 Bienvenue sur nestjs-saas-starter !',
       html: welcomeEmailTemplate(name),
+    });
+  }
+
+  @OnEvent('organization.invitation')
+  async handleOrganizationInvitation(
+    payload: OrganizationInvitationEvent,
+  ): Promise<void> {
+    await this.sendMail({
+      to: payload.email,
+      subject: `🏢 Invitation à rejoindre ${payload.organizationName}`,
+      html: organizationInvitationTemplate(
+        payload.organizationName,
+        payload.token,
+        payload.expiresAt,
+      ),
     });
   }
 }

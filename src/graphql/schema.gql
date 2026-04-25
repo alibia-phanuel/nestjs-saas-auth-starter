@@ -1,0 +1,139 @@
+# ------------------------------------------------------
+# THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
+# ------------------------------------------------------
+
+type AuthResponse {
+  accessToken: String
+  email: String
+  key: String!
+  message: String!
+  refreshToken: String
+  requiresTwoFactor: Boolean
+}
+
+input CreateOrganizationInput {
+  name: String!
+  planType: PlanType
+  slug: String!
+}
+
+"""
+A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
+"""
+scalar DateTime
+
+input ForgotPasswordInput {
+  email: String!
+}
+
+input InviteMemberInput {
+  email: String!
+  role: MemberRole
+}
+
+input LoginInput {
+  email: String!
+  password: String!
+}
+
+enum MemberRole {
+  ADMIN
+  MEMBER
+  OWNER
+}
+
+type MessageResponse {
+  key: String!
+  message: String!
+}
+
+type Mutation {
+  acceptInvitation(token: String!): MessageResponse!
+  createOrganization(input: CreateOrganizationInput!): OrganizationType!
+  deleteUser(id: ID!): MessageResponse!
+  forgotPassword(input: ForgotPasswordInput!): MessageResponse!
+  inviteMember(input: InviteMemberInput!, orgId: ID!): MessageResponse!
+  login(input: LoginInput!): AuthResponse!
+  refreshToken(input: RefreshTokenInput!): AuthResponse!
+  resetPassword(input: ResetPasswordInput!): MessageResponse!
+  signup(input: SignupInput!): AuthResponse!
+  updateUser(id: ID!, input: UpdateUserInput!): UserType!
+  verifyOtp(input: VerifyOtpInput!): MessageResponse!
+}
+
+type OrganizationMemberType {
+  id: ID!
+  joinedAt: DateTime!
+  role: MemberRole!
+  userId: String!
+}
+
+type OrganizationType {
+  createdAt: DateTime!
+  id: ID!
+  members: [OrganizationMemberType!]
+  name: String!
+  planType: PlanType!
+  slug: String!
+}
+
+enum PlanType {
+  ENTERPRISE
+  FREE
+  PRO
+}
+
+type Query {
+  me: UserType!
+  myOrganizations: [OrganizationType!]!
+  organization(id: ID!): OrganizationType!
+  user(id: ID!): UserType!
+  users: [UserType!]!
+}
+
+input RefreshTokenInput {
+  refreshToken: String!
+}
+
+input ResetPasswordInput {
+  email: String!
+  newPassword: String!
+  otp: String!
+}
+
+type RoleType {
+  name: String!
+}
+
+input SignupInput {
+  email: String!
+  firstName: String
+  lastName: String
+  password: String!
+}
+
+input UpdateUserInput {
+  firstName: String
+  lastName: String
+}
+
+type UserRoleType {
+  role: RoleType!
+}
+
+type UserType {
+  createdAt: DateTime!
+  email: String!
+  emailVerified: Boolean!
+  firstName: String
+  id: ID!
+  lastName: String
+  roles: [UserRoleType!]
+  status: String!
+  twoFactorEnabled: Boolean!
+}
+
+input VerifyOtpInput {
+  email: String!
+  otp: String!
+}

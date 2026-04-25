@@ -26,6 +26,7 @@
  */
 
 import { Module } from '@nestjs/common';
+import { GraphqlModule } from './graphql/graphql.module';
 import { ConfigModule } from '@nestjs/config';
 import { I18nModule } from './i18n/i18n.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -34,6 +35,9 @@ import { AuthModule } from './auth/auth.module';
 import { MailModule } from './mail/mail.module';
 import { UsersModule } from './users/users.module';
 import { OrganizationsModule } from './organizations/organizations.module';
+import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
+import { GraphQLModule } from '@nestjs/graphql';
+import { join } from 'path';
 @Module({
   imports: [
     /**
@@ -50,6 +54,18 @@ import { OrganizationsModule } from './organizations/organizations.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
+
+    // ── GraphQL — Rappel Module 14 (09:05:48) ────────
+    // Code First → NestJS génère le schema SDL automatiquement
+    // depuis les décorateurs @ObjectType, @Query, @Mutation
+    GraphQLModule.forRoot<ApolloDriverConfig>({
+      driver: ApolloDriver,
+      autoSchemaFile: join(process.cwd(), 'src/graphql/schema.gql'),
+      sortSchema: true,
+      playground: true, // Interface GraphQL interactive
+      context: ({ req }: { req: Request }) => ({ req }),
+    }),
+    GraphqlModule,
     OrganizationsModule, // gestion des organisations (CRUD, membres, rôles)
     I18nModule, // messages traduits (clés i18n → réponses HTTP)
     PrismaModule, // singleton PrismaService partagé entre les modules

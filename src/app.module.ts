@@ -54,15 +54,24 @@ import { join } from 'path';
       isGlobal: true,
       envFilePath: '.env',
     }),
-
-    // ── GraphQL — Rappel Module 14 (09:05:48) ────────
-    // Code First → NestJS génère le schema SDL automatiquement
-    // depuis les décorateurs @ObjectType, @Query, @Mutation
+    /**
+     * GraphQLModule.forRoot()
+     *
+     * Configure Apollo Server avec l'approche Code First.
+     * NestJS génère automatiquement le schéma SDL depuis
+     * les décorateurs @ObjectType, @InputType, @Query, @Mutation.
+     *
+     * 💡 Rappel Module 14 (09:05:48 GraphQL Server Setup)
+     *    autoSchemaFile → chemin où le schéma SDL est généré
+     *    playground → interface GraphQL interactive (dev only)
+     *    context → injecte req dans le contexte Apollo
+     *              nécessaire pour GqlAuthGuard et GqlCurrentUser
+     */
     GraphQLModule.forRoot<ApolloDriverConfig>({
       driver: ApolloDriver,
       autoSchemaFile: join(process.cwd(), 'src/graphql/schema.gql'),
       sortSchema: true,
-      playground: true, // Interface GraphQL interactive
+      playground: process.env.NODE_ENV !== 'production',
       context: ({ req }: { req: Request }) => ({ req }),
     }),
     GraphqlModule,

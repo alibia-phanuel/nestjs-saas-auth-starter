@@ -22,6 +22,10 @@ A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date
 """
 scalar DateTime
 
+input Enable2FAInput {
+  code: String!
+}
+
 input ForgotPasswordInput {
   email: String!
 }
@@ -36,6 +40,7 @@ input LoginInput {
   password: String!
 }
 
+"""Role of a member within an organization"""
 enum MemberRole {
   ADMIN
   MEMBER
@@ -48,16 +53,54 @@ type MessageResponse {
 }
 
 type Mutation {
+  """Accept an organization invitation using the token from email"""
   acceptInvitation(token: String!): MessageResponse!
+
+  """Create a new organization — creator becomes OWNER"""
   createOrganization(input: CreateOrganizationInput!): OrganizationType!
+
+  """Delete organization — owner only"""
+  deleteOrganization(id: ID!): MessageResponse!
   deleteUser(id: ID!): MessageResponse!
+
+  """Disable 2FA — requires valid TOTP code for confirmation"""
+  disable2FA(input: Enable2FAInput!): MessageResponse!
+
+  """Enable 2FA after scanning QR code — requires valid TOTP code"""
+  enable2FA(input: Enable2FAInput!): MessageResponse!
+
+  """Send password reset OTP to email"""
   forgotPassword(input: ForgotPasswordInput!): MessageResponse!
+
+  """Invite a member by email — owner/admin only"""
   inviteMember(input: InviteMemberInput!, orgId: ID!): MessageResponse!
+
+  """Login with email and password — returns JWT tokens or 2FA prompt"""
   login(input: LoginInput!): AuthResponse!
+
+  """Refresh access token using a valid refresh token"""
   refreshToken(input: RefreshTokenInput!): AuthResponse!
+
+  """Remove a member from organization — owner/admin only"""
+  removeMember(orgId: ID!, userId: ID!): MessageResponse!
+
+  """Reset password using OTP received by email"""
   resetPassword(input: ResetPasswordInput!): MessageResponse!
+
+  """Generate 2FA QR code to scan with Google Authenticator"""
+  setup2FA: Setup2FAResponse!
+
+  """Register a new user — sends OTP to email for verification"""
   signup(input: SignupInput!): AuthResponse!
+
+  """Update organization — owner/admin only"""
+  updateOrganization(id: ID!, input: UpdateOrganizationInput!): OrganizationType!
   updateUser(id: ID!, input: UpdateUserInput!): UserType!
+
+  """Verify 2FA TOTP code after login — returns JWT tokens"""
+  verify2FA(input: Verify2FAInput!): AuthResponse!
+
+  """Verify OTP received by email to activate the account"""
   verifyOtp(input: VerifyOtpInput!): MessageResponse!
 }
 
@@ -77,6 +120,7 @@ type OrganizationType {
   slug: String!
 }
 
+"""SaaS subscription plan type"""
 enum PlanType {
   ENTERPRISE
   FREE
@@ -84,8 +128,13 @@ enum PlanType {
 }
 
 type Query {
+  """Get the currently authenticated user profile"""
   me: UserType!
+
+  """Get all organizations where the current user is a member"""
   myOrganizations: [OrganizationType!]!
+
+  """Get organization details — user must be a member"""
   organization(id: ID!): OrganizationType!
   user(id: ID!): UserType!
   users: [UserType!]!
@@ -105,11 +154,22 @@ type RoleType {
   name: String!
 }
 
+type Setup2FAResponse {
+  otpauthUrl: String!
+  qrCode: String!
+  secret: String!
+}
+
 input SignupInput {
   email: String!
   firstName: String
   lastName: String
   password: String!
+}
+
+input UpdateOrganizationInput {
+  name: String
+  planType: PlanType
 }
 
 input UpdateUserInput {
@@ -131,6 +191,11 @@ type UserType {
   roles: [UserRoleType!]
   status: String!
   twoFactorEnabled: Boolean!
+}
+
+input Verify2FAInput {
+  code: String!
+  email: String!
 }
 
 input VerifyOtpInput {

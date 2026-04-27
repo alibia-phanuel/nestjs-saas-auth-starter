@@ -1,0 +1,4 @@
+{
+  "typescript.tsconfig.fallback": "./tsconfig.spec.json",
+  "typescript.preferences.includePackageJsonAutoImports": "auto"
+}

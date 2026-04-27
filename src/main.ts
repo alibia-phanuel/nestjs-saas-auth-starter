@@ -132,11 +132,9 @@ API REST complète pour accélérer vos projets SaaS.
       },
       'api-key',
     )
-    .addTag('Auth', 'Signup, Login, OTP, 2FA, OAuth, API Keys')
-    .addTag('API Keys', 'Create and manage API keys')
+    .addTag('Auth', 'Signup, Login, OTP, 2FA, OAuth, ')
     .addTag('Users', 'User management and RBAC')
     .addTag('Organizations', 'Multi-tenancy management')
-    .addTag('Health', 'Application health check')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

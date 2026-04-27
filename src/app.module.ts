@@ -26,6 +26,7 @@
  */
 
 import { Module } from '@nestjs/common';
+import { GraphqlModule } from './graphql/graphql.module';
 import { ConfigModule } from '@nestjs/config';
 import { I18nModule } from './i18n/i18n.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -33,8 +34,27 @@ import { AppController } from './app.controller';
 import { AuthModule } from './auth/auth.module';
 import { MailModule } from './mail/mail.module';
 import { UsersModule } from './users/users.module';
+import { OrganizationsModule } from './organizations/organizations.module';
+import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
+import { GraphQLModule } from '@nestjs/graphql';
+import { join } from 'path';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
+import { throttlerConfig } from './common/config/throttler.config';
+import { CommonModule } from './common/common.module';
 @Module({
   imports: [
+    /**
+     * ThrottlerModule — Rate Limiting global
+     *
+     * 💡 ThrottlerModule.forRoot() → configure le rate limiting
+     *    pour toute l'application avec nos throttles nommés.
+     *    Chaque throttle peut être appliqué individuellement
+     *    sur les endpoints avec @Throttle({ throttleName: {...} })
+     */
+    ThrottlerModule.forRoot(throttlerConfig),
+
+    CommonModule,
     /**
      * ConfigModule — Variables d'environnement
      *
@@ -49,12 +69,47 @@ import { UsersModule } from './users/users.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
-
+    /**
+     * GraphQLModule.forRoot()
+     *
+     * Configure Apollo Server avec l'approche Code First.
+     * NestJS génère automatiquement le schéma SDL depuis
+     * les décorateurs @ObjectType, @InputType, @Query, @Mutation.
+     *
+     * 💡 Rappel Module 14 (09:05:48 GraphQL Server Setup)
+     *    autoSchemaFile → chemin où le schéma SDL est généré
+     *    playground → interface GraphQL interactive (dev only)
+     *    context → injecte req dans le contexte Apollo
+     *              nécessaire pour GqlAuthGuard et GqlCurrentUser
+     */
+    GraphQLModule.forRoot<ApolloDriverConfig>({
+      driver: ApolloDriver,
+      autoSchemaFile: join(process.cwd(), 'src/graphql/schema.gql'),
+      sortSchema: true,
+      playground: process.env.NODE_ENV !== 'production',
+      context: ({ req }: { req: Request }) => ({ req }),
+    }),
+    GraphqlModule,
+    OrganizationsModule, // gestion des organisations (CRUD, membres, rôles)
     I18nModule, // messages traduits (clés i18n → réponses HTTP)
     PrismaModule, // singleton PrismaService partagé entre les modules
     AuthModule, // inscription, connexion, JWT, OAuth, OTP
     MailModule, // emails transactionnels via événements @OnEvent()
     UsersModule, // gestion des utilisateurs (CRUD, rôles, permissions)
+  ],
+  providers: [
+    /**
+     * ThrottlerGuard global — applique le rate limiting
+     * sur TOUS les endpoints automatiquement.
+     *
+     * 💡 APP_GUARD → token NestJS pour enregistrer un guard
+     *    global sans app.useGlobalGuards() dans main.ts.
+     *    Avantage : le guard a accès à l'injection de dépendances.
+     */
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
   ],
   controllers: [AppController], // controller racine (healthcheck, route par défaut)
 })

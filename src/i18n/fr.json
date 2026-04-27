@@ -1,10 +1,10 @@
 {
   "auth": {
-"otp_sent": "Un code de vérification a été envoyé à votre email",
-"otp_invalid": "Code de vérification invalide ou expiré",
-"otp_verified": "Email vérifié avec succès",
-"password_reset_sent": "Code de réinitialisation envoyé à votre email",
-"password_reset_success": "Mot de passe réinitialisé avec succès",
+    "otp_sent": "Un code de vérification a été envoyé à votre email",
+    "otp_invalid": "Code de vérification invalide ou expiré",
+    "otp_verified": "Email vérifié avec succès",
+    "password_reset_sent": "Code de réinitialisation envoyé à votre email",
+    "password_reset_success": "Mot de passe réinitialisé avec succès",
     "invalid_credentials": "Email ou mot de passe incorrect",
     "email_not_verified": "Veuillez vérifier votre email avant de vous connecter",
     "account_suspended": "Votre compte a été suspendu",
@@ -30,16 +30,6 @@
     "deleted": "Compte supprimé avec succès",
     "forbidden": "Vous n'avez pas la permission d'effectuer cette action"
   },
-  "organizations": {
-    "not_found": "Organisation introuvable",
-    "created": "Organisation créée avec succès",
-    "updated": "Organisation mise à jour avec succès",
-    "deleted": "Organisation supprimée avec succès",
-    "already_member": "L'utilisateur est déjà membre de cette organisation",
-    "invitation_sent": "Invitation envoyée avec succès",
-    "invitation_invalid": "Invitation invalide ou expirée",
-    "invitation_accepted": "Invitation acceptée avec succès"
-  },
   "validation": {
     "required": "Ce champ est requis",
     "invalid_email": "Veuillez fournir une adresse email valide",
@@ -51,5 +41,18 @@
     "not_found": "Ressource introuvable",
     "unauthorized": "Non autorisé",
     "forbidden": "Accès refusé"
+  },
+  "organizations": {
+    "not_found": "Organisation introuvable",
+    "created": "Organisation créée avec succès",
+    "updated": "Organisation mise à jour avec succès",
+    "deleted": "Organisation supprimée avec succès",
+    "already_member": "L'utilisateur est déjà membre de cette organisation",
+    "not_member": "L'utilisateur n'est pas membre de cette organisation",
+    "invitation_sent": "Invitation envoyée avec succès",
+    "invitation_invalid": "Invitation invalide ou expirée",
+    "invitation_accepted": "Invitation acceptée avec succès",
+    "forbidden": "Vous n'avez pas la permission d'effectuer cette action",
+    "slug_taken": "Ce slug est déjà utilisé"
   }
 }

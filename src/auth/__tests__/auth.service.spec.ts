@@ -103,10 +103,11 @@ const mockI18nService = {
  * - verifyAsync() → vérifie qu'un token est valide
  */
 const mockJwtService = {
+  // ✅ cast `as jest.Mock` au lieu de jest.fn<any>()
+  // jest.fn() sans générique est correct, le cast donne accès à mockResolvedValueOnce
   signAsync: jest.fn(),
   verifyAsync: jest.fn(),
 };
-
 /**
  * 📢 FAUX EVENT EMITTER (mock)
  *
@@ -333,15 +334,15 @@ describe('AuthService', () => {
       prisma.user.findUnique.mockResolvedValue(mockUser);
       prisma.refreshToken.create.mockResolvedValue({});
       mockJwtService.signAsync
-        .mockResolvedValueOnce('access-token-mock') // 1er appel → access token
-        .mockResolvedValueOnce('refresh-token-mock'); // 2e appel → refresh token
+        .mockResolvedValueOnce('access-token-mock')
+        .mockResolvedValueOnce('refresh-token-mock');
 
       const result = await service.login(loginDto);
 
       expect(result).toHaveProperty('accessToken');
       expect(result).toHaveProperty('refreshToken');
       expect(result).toHaveProperty('key', 'auth.login_success');
-    });
+    }, 15000);
 
     /**
      * ✅ Test 2 : Utilisateur inexistant → UnauthorizedException

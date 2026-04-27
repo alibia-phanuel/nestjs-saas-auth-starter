@@ -70,7 +70,7 @@ describe('I18nService', () => {
      */
     it('devrait afficher la traduction en anglais par défaut', () => {
       const result = service.translate('auth.invalid_credentials');
-      expect(result).toBe('Adresse e-mail ou mot de passe incorrect');
+      expect(result).toBe('Invalid email or password');
     });
 
     // ── Cas 2 : Langue explicite (fr) ────────────────────────
@@ -110,7 +110,7 @@ describe('I18nService', () => {
      */
     it("devrait revenir à la langue par défaut lorsque la langue n'est pas prise en charge", () => {
       const result = service.translate('auth.login_success', 'ar');
-      expect(result).toBe('Connexion réussie');
+      expect(result).toBe('Login successful');
     });
   });
 
@@ -132,7 +132,7 @@ describe('I18nService', () => {
       const result = service.createResponse('auth.login_success');
       expect(result).toEqual({
         key: 'auth.login_success',
-        message: 'Connexion réussie',
+        message: 'Login successful',
       });
     });
 

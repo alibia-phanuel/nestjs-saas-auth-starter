@@ -11,19 +11,33 @@
  *    Il reçoit les requêtes, les délègue aux services
  *    (AuthService, OAuthService) et retourne les réponses.
  *
+ * 🚦 Rate Limiting — Protection contre les attaques :
+ *    ─────────────────────────────────────────────────────
+ *    @Throttle({ auth: { limit: 5, ttl: 60_000 } })
+ *    → max 5 tentatives par minute par IP
+ *    → protège contre le brute force sur login/signup
+ *
+ *    @Throttle({ email: { limit: 3, ttl: 60_000 } })
+ *    → max 3 tentatives par minute par IP
+ *    → protège contre le spam d'emails OTP
+ *
+ *    Ces throttles sont définis dans throttlerConfig et
+ *    s'ajoutent au ThrottlerGuard global (100 req/min).
+ *    ─────────────────────────────────────────────────────
+ *
  * 📋 Endpoints exposés :
  *    ─────────────────────────────────────────────────────
- *    POST /auth/signup            → Inscription
- *    POST /auth/verify-otp        → Vérification OTP email
- *    POST /auth/login             → Connexion classique
+ *    POST /auth/signup            → Inscription (email: 3/min)
+ *    POST /auth/verify-otp        → Vérification OTP (auth: 10/min)
+ *    POST /auth/login             → Connexion classique (auth: 5/min)
  *    POST /auth/refresh           → Renouvellement des tokens
- *    POST /auth/forgot-password   → Demande de réinitialisation
- *    POST /auth/reset-password    → Nouveau mot de passe
+ *    POST /auth/forgot-password   → Demande réinitialisation (email: 3/min)
+ *    POST /auth/reset-password    → Nouveau mot de passe (auth: 5/min)
  *    GET  /auth/me                → Profil utilisateur connecté
  *    POST /auth/2fa/setup         → Configurer le 2FA
- *    POST /auth/2fa/enable        → Activer le 2FA
- *    POST /auth/2fa/disable       → Désactiver le 2FA
- *    POST /auth/2fa/verify        → Vérifier le code 2FA
+ *    POST /auth/2fa/enable        → Activer le 2FA (auth: 5/min)
+ *    POST /auth/2fa/disable       → Désactiver le 2FA (auth: 5/min)
+ *    POST /auth/2fa/verify        → Vérifier le code 2FA (auth: 5/min)
  *    GET  /auth/google            → Lancer l'auth Google
  *    GET  /auth/google/callback   → Callback Google OAuth
  *    ─────────────────────────────────────────────────────
@@ -51,6 +65,7 @@ import {
   ApiBody,
   ApiBearerAuth,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { SignupDto } from './dto/signup.dto';
 import { LoginDto } from './dto/login.dto';
@@ -58,8 +73,12 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { Enable2faDto } from './dto/enable-2fa.dto';
+import { Verify2faDto } from './dto/verify-2fa.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { GoogleAuthGuard } from './guards/google-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
+import { OAuthService } from './oauth.service';
 import type {
   GoogleUser,
   JwtPayload,
@@ -67,11 +86,7 @@ import type {
   MessageResponse,
   Setup2FAResult,
 } from './types/auth.types';
-import { Enable2faDto } from './dto/enable-2fa.dto';
-import { Verify2faDto } from './dto/verify-2fa.dto';
 import type { Response } from 'express';
-import { GoogleAuthGuard } from './guards/google-auth.guard';
-import { OAuthService } from './oauth.service';
 
 /**
  * @ApiTags('Auth')
@@ -104,17 +119,36 @@ export class AuthController {
    * pour vérifier son adresse. Le compte est créé avec le
    * statut PENDING jusqu'à la vérification de l'OTP.
    *
+   * 🚦 Rate Limiting : 3 requêtes / minute / IP
+   *    Raison : éviter le spam de créations de comptes
+   *    et l'envoi massif d'emails OTP depuis la même IP.
+   *    Au-delà → 429 Too Many Requests.
+   *
    * @HttpCode(201) → retourne 201 Created (pas 200 par défaut)
    * @param dto → SignupDto contenant email, password, prénom, nom
    * @returns   → MessageResponse confirmant l'envoi de l'OTP
    */
   @Post('signup')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Inscription — envoie un OTP par email' })
+  @Throttle({ email: { limit: 3, ttl: 60_000 } })
+  @ApiOperation({
+    summary: 'Inscription — envoie un OTP par email',
+    description: `
+Crée un nouveau compte utilisateur.
+Un OTP à 6 chiffres est envoyé par email pour vérifier l'adresse.
+Le compte reste PENDING jusqu'à la vérification via /auth/verify-otp.
+
+**Rate Limiting** : 3 requêtes / minute / IP
+    `,
+  })
   @ApiResponse({ status: 201, description: 'OTP envoyé par email' })
   @ApiResponse({
     status: 409,
     description: 'Un compte avec cet email existe déjà',
+  })
+  @ApiResponse({
+    status: 429,
+    description: 'Trop de requêtes — attendez 1 minute',
   })
   async signup(@Body() dto: SignupDto): Promise<MessageResponse> {
     return this.authService.signup(dto);
@@ -131,15 +165,34 @@ export class AuthController {
    * Si valide, le compte passe de PENDING à ACTIVE et
    * emailVerified passe à true. L'OTP est effacé après usage.
    *
+   * 🚦 Rate Limiting : 10 requêtes / minute / IP
+   *    Raison : limiter les tentatives de brute force sur
+   *    les codes OTP à 6 chiffres (1 million de combinaisons).
+   *    Avec 10 tentatives/min, il faudrait 1M/10 = 100K minutes
+   *    pour tester tous les codes. OTP expiré après 15 min.
+   *
    * @param dto → VerifyOtpDto contenant email + code OTP à 6 chiffres
    * @returns   → MessageResponse confirmant l'activation du compte
    */
   @Post('verify-otp')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Vérifier l'OTP pour activer le compte" })
+  @Throttle({ auth: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({
+    summary: "Vérifier l'OTP pour activer le compte",
+    description: `
+Vérifie le code OTP reçu par email et active le compte.
+L'OTP est valide 15 minutes et usage unique.
+
+**Rate Limiting** : 10 requêtes / minute / IP
+    `,
+  })
   @ApiBody({ type: VerifyOtpDto })
   @ApiResponse({ status: 200, description: 'Compte activé avec succès' })
   @ApiResponse({ status: 401, description: 'OTP invalide ou expiré' })
+  @ApiResponse({
+    status: 429,
+    description: 'Trop de requêtes — attendez 1 minute',
+  })
   async verifyOtp(@Body() dto: VerifyOtpDto): Promise<MessageResponse> {
     return this.authService.verifyOtp(dto);
   }
@@ -160,16 +213,60 @@ export class AuthController {
    *    le code Google Authenticator (requiresTwoFactor: true).
    *    L'utilisateur doit alors appeler POST /auth/2fa/verify.
    *
+   * 🚦 Rate Limiting : 5 requêtes / minute / IP
+   *    Raison : protection principale contre le brute force.
+   *    C'est l'endpoint le plus critique — un attaquant qui
+   *    essaie des combinaisons email/password sera bloqué
+   *    après 5 tentatives infructueuses par minute.
+   *
    * @param dto → LoginDto contenant email + password
    * @returns   → AuthTokens (accessToken + refreshToken)
    *              ou { requiresTwoFactor: true } si 2FA activé
    */
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Se connecter avec email et mot de passe' })
+  @Throttle({ auth: { limit: 5, ttl: 60_000 } })
+  @ApiOperation({
+    summary: 'Se connecter avec email et mot de passe',
+    description: `
+Authentifie l'utilisateur et retourne les tokens JWT.
+
+Si le 2FA est activé → retourne \`{ requiresTwoFactor: true, email }\`
+Le frontend doit alors appeler \`POST /auth/2fa/verify\` avec le code Google Authenticator.
+
+**Rate Limiting** : 5 requêtes / minute / IP (protection brute force)
+    `,
+  })
   @ApiBody({ type: LoginDto })
-  @ApiResponse({ status: 200, description: 'Retourne les tokens JWT' })
+  @ApiResponse({
+    status: 200,
+    description: 'Retourne les tokens JWT',
+    schema: {
+      example: {
+        key: 'auth.login_success',
+        message: 'Login successful',
+        accessToken: 'eyJhbGc...',
+        refreshToken: 'eyJhbGc...',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: '2FA requis',
+    schema: {
+      example: {
+        key: 'auth.2fa_required',
+        message: 'Two-factor authentication code required',
+        requiresTwoFactor: true,
+        email: 'user@example.com',
+      },
+    },
+  })
   @ApiResponse({ status: 401, description: 'Identifiants invalides' })
+  @ApiResponse({
+    status: 429,
+    description: 'Trop de requêtes — attendez 1 minute',
+  })
   async login(@Body() dto: LoginDto): Promise<AuthTokens | MessageResponse> {
     return this.authService.login(dto);
   }
@@ -190,14 +287,41 @@ export class AuthController {
    *    doit appeler cet endpoint pour obtenir un nouvel
    *    accessToken avant de relancer sa requête originale.
    *
+   * 💡 Pas de rate limiting strict ici car :
+   *    - Le refreshToken est un secret long et aléatoire
+   *    - Il est révoqué après usage (rotation)
+   *    - Un attaquant sans refreshToken valide ne peut rien faire
+   *    Le throttle global (100/min) est suffisant.
+   *
    * @param dto → RefreshTokenDto contenant le refreshToken
    * @returns   → AuthTokens avec de nouveaux tokens
    */
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Rafraîchir l'access token" })
+  @ApiOperation({
+    summary: "Rafraîchir l'access token",
+    description: `
+Génère un nouvel accessToken à partir d'un refreshToken valide.
+L'ancien refreshToken est révoqué (rotation des tokens — sécurité).
+
+**Rate Limiting** : 100 requêtes / minute / IP (throttle global)
+    `,
+  })
   @ApiBody({ type: RefreshTokenDto })
-  @ApiResponse({ status: 200, description: 'Nouveaux tokens retournés' })
+  @ApiResponse({
+    status: 200,
+    description: 'Nouveaux tokens retournés',
+    schema: {
+      example: {
+        accessToken: 'eyJhbGc...(nouveau)',
+        refreshToken: 'eyJhbGc...(nouveau)',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Refresh token invalide, révoqué ou expiré',
+  })
   async refresh(@Body() dto: RefreshTokenDto): Promise<AuthTokens> {
     return this.authService.refreshToken(dto.refreshToken);
   }
@@ -213,17 +337,46 @@ export class AuthController {
    *
    * 🛡️ Sécurité : retourne toujours la même réponse que
    *    l'email existe ou non (protection contre l'énumération).
+   *    Un attaquant ne peut pas savoir quels emails sont
+   *    enregistrés en testant différentes adresses.
+   *
+   * 🚦 Rate Limiting : 3 requêtes / minute / IP
+   *    Raison : c'est l'endpoint le plus susceptible d'être
+   *    utilisé pour spammer des emails. 3 tentatives/min
+   *    permet l'usage légitime tout en bloquant le spam.
    *
    * @param dto → ForgotPasswordDto contenant l'email
    * @returns   → MessageResponse (même réponse dans tous les cas)
    */
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ email: { limit: 3, ttl: 60_000 } })
   @ApiOperation({
     summary: 'Demander une réinitialisation — envoie un OTP par email',
+    description: `
+Envoie un OTP de réinitialisation à l'email fourni.
+
+**Sécurité** : retourne toujours la même réponse que l'email existe ou non
+(protection contre l'énumération d'emails).
+
+**Rate Limiting** : 3 requêtes / minute / IP (protection anti-spam emails)
+    `,
   })
   @ApiBody({ type: ForgotPasswordDto })
-  @ApiResponse({ status: 200, description: "OTP envoyé si l'email existe" })
+  @ApiResponse({
+    status: 200,
+    description: "OTP envoyé si l'email existe",
+    schema: {
+      example: {
+        key: 'auth.password_reset_sent',
+        message: 'Password reset code sent to your email',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 429,
+    description: 'Trop de requêtes — attendez 1 minute',
+  })
   async forgotPassword(
     @Body() dto: ForgotPasswordDto,
   ): Promise<MessageResponse> {
@@ -240,18 +393,42 @@ export class AuthController {
    * Définit un nouveau mot de passe après vérification de l'OTP.
    * L'OTP est effacé après usage (usage unique).
    *
+   * 🚦 Rate Limiting : 5 requêtes / minute / IP
+   *    Raison : limiter les tentatives de brute force sur l'OTP
+   *    de réinitialisation. Combiné avec l'expiration 15 min
+   *    de l'OTP, cela rend le brute force pratiquement impossible.
+   *
    * @param dto → ResetPasswordDto contenant email + OTP + newPassword
    * @returns   → MessageResponse confirmant la réinitialisation
    */
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Réinitialiser le mot de passe avec l'OTP" })
+  @Throttle({ auth: { limit: 5, ttl: 60_000 } })
+  @ApiOperation({
+    summary: "Réinitialiser le mot de passe avec l'OTP",
+    description: `
+Définit un nouveau mot de passe après vérification de l'OTP reçu par email.
+L'OTP est à usage unique — il est effacé après utilisation.
+
+**Rate Limiting** : 5 requêtes / minute / IP
+    `,
+  })
   @ApiBody({ type: ResetPasswordDto })
   @ApiResponse({
     status: 200,
     description: 'Mot de passe réinitialisé avec succès',
+    schema: {
+      example: {
+        key: 'auth.password_reset_success',
+        message: 'Password reset successfully',
+      },
+    },
   })
   @ApiResponse({ status: 401, description: 'OTP invalide ou expiré' })
+  @ApiResponse({
+    status: 429,
+    description: 'Trop de requêtes — attendez 1 minute',
+  })
   async resetPassword(@Body() dto: ResetPasswordDto): Promise<MessageResponse> {
     return this.authService.resetPassword({
       email: dto.email,
@@ -271,6 +448,11 @@ export class AuthController {
    * connecté, extraites directement du token JWT via
    * @CurrentUser() — sans requête en base de données.
    *
+   * 💡 Pas de rate limiting strict — cet endpoint est en
+   *    lecture seule et ne peut être appelé que par un
+   *    utilisateur avec un token JWT valide. Le throttle
+   *    global (100/min) est suffisant.
+   *
    * @UseGuards(JwtAuthGuard) → token JWT obligatoire
    * @ApiBearerAuth()         → documente l'auth JWT dans Swagger
    *
@@ -280,8 +462,28 @@ export class AuthController {
   @Get('me')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: "Récupérer l'utilisateur actuellement connecté" })
-  @ApiResponse({ status: 200, description: "Données de l'utilisateur courant" })
+  @ApiOperation({
+    summary: "Récupérer l'utilisateur actuellement connecté",
+    description: `
+Retourne le profil de l'utilisateur connecté depuis le token JWT.
+Aucune requête en base de données — données extraites du token.
+
+**Authentification requise** : Bearer Token JWT
+**Rate Limiting** : 100 requêtes / minute / IP (throttle global)
+    `,
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Données de l'utilisateur courant",
+    schema: {
+      example: {
+        sub: 'uuid-123',
+        email: 'user@example.com',
+        iat: 1714000000,
+        exp: 1714000900,
+      },
+    },
+  })
   @ApiResponse({
     status: 401,
     description: 'Non autorisé — token manquant ou invalide',
@@ -306,6 +508,10 @@ export class AuthController {
    *    2. Scanner le QR code avec Google Authenticator
    *    3. Appeler POST /auth/2fa/enable avec le code généré
    *
+   * 💡 Pas de rate limiting strict — nécessite un JWT valide.
+   *    Un utilisateur authentifié peut configurer son 2FA
+   *    autant de fois que nécessaire.
+   *
    * @param user → utilisateur connecté (on a besoin de son id)
    * @returns    → Setup2FAResult contenant secret + otpauthUrl + qrCode
    */
@@ -314,10 +520,30 @@ export class AuthController {
   @ApiBearerAuth('access-token')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary:
-      "Générer un code QR pour l'authentification à deux facteurs — à scanner avec Google Authenticator",
+    summary: 'Générer un QR code pour Google Authenticator',
+    description: `
+Génère un secret TOTP et un QR code à scanner avec Google Authenticator.
+Le 2FA n'est pas encore actif — confirmer avec POST /auth/2fa/enable.
+
+**Étapes** :
+1. Appeler cet endpoint → recevoir QR code
+2. Scanner avec Google Authenticator
+3. Appeler /auth/2fa/enable avec le code généré
+
+**Authentification requise** : Bearer Token JWT
+    `,
   })
-  @ApiResponse({ status: 200, description: 'Retourne le QR code et le secret' })
+  @ApiResponse({
+    status: 200,
+    description: 'QR code et secret générés',
+    schema: {
+      example: {
+        secret: 'JBSWY3DPEHPK3PXP...',
+        otpauthUrl: 'otpauth://totp/nestjs-saas-starter:user@example.com?...',
+        qrCode: 'data:image/png;base64,...',
+      },
+    },
+  })
   async setup2FA(@CurrentUser() user: { id: string }): Promise<Setup2FAResult> {
     return this.authService.setup2FA(user.id);
   }
@@ -334,6 +560,10 @@ export class AuthController {
    * des codes valides. Après activation, chaque connexion
    * demandera un code Google Authenticator.
    *
+   * 🚦 Rate Limiting : 5 requêtes / minute / IP
+   *    Raison : limiter les tentatives de brute force sur
+   *    le code de confirmation lors de l'activation.
+   *
    * @param user → utilisateur connecté (on a besoin de son id)
    * @param dto  → Enable2faDto contenant le code à 6 chiffres
    * @returns    → MessageResponse confirmant l'activation
@@ -342,16 +572,33 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ auth: { limit: 5, ttl: 60_000 } })
   @ApiOperation({
-    summary:
-      "Activer l'authentification à deux facteurs après avoir scanné le code QR",
+    summary: 'Activer le 2FA après avoir scanné le QR code',
+    description: `
+Active l'authentification à deux facteurs sur le compte.
+Nécessite un code TOTP valide généré par Google Authenticator.
+
+**Rate Limiting** : 5 requêtes / minute / IP
+**Authentification requise** : Bearer Token JWT
+    `,
   })
   @ApiBody({ type: Enable2faDto })
   @ApiResponse({
     status: 200,
-    description: 'Authentification à deux facteurs activée',
+    description: '2FA activé avec succès',
+    schema: {
+      example: {
+        key: 'auth.2fa_enabled',
+        message: 'Two-factor authentication enabled',
+      },
+    },
   })
-  @ApiResponse({ status: 401, description: 'Code invalide' })
+  @ApiResponse({ status: 401, description: 'Code TOTP invalide' })
+  @ApiResponse({
+    status: 429,
+    description: 'Trop de requêtes — attendez 1 minute',
+  })
   async enable2FA(
     @CurrentUser() user: { id: string },
     @Body() dto: Enable2faDto,
@@ -373,6 +620,10 @@ export class AuthController {
    * 💡 Même DTO qu'enable2FA (Enable2faDto) car les deux
    *    opérations nécessitent uniquement un code à 6 chiffres.
    *
+   * 🚦 Rate Limiting : 5 requêtes / minute / IP
+   *    Raison : empêcher un attaquant ayant accès au compte
+   *    de désactiver le 2FA par brute force.
+   *
    * @param user → utilisateur connecté (on a besoin de son id)
    * @param dto  → Enable2faDto contenant le code à 6 chiffres
    * @returns    → MessageResponse confirmant la désactivation
@@ -381,11 +632,32 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Désactiver le 2FA' })
+  @Throttle({ auth: { limit: 5, ttl: 60_000 } })
+  @ApiOperation({
+    summary: 'Désactiver le 2FA',
+    description: `
+Désactive l'authentification à deux facteurs.
+Un code TOTP valide est requis pour confirmer la désactivation.
+
+**Rate Limiting** : 5 requêtes / minute / IP
+**Authentification requise** : Bearer Token JWT
+    `,
+  })
   @ApiBody({ type: Enable2faDto })
   @ApiResponse({
     status: 200,
-    description: 'Authentification à deux facteurs désactivée',
+    description: '2FA désactivé avec succès',
+    schema: {
+      example: {
+        key: 'auth.2fa_disabled',
+        message: 'Two-factor authentication disabled',
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Code TOTP invalide' })
+  @ApiResponse({
+    status: 429,
+    description: 'Trop de requêtes — attendez 1 minute',
   })
   async disable2FA(
     @CurrentUser() user: { id: string },
@@ -409,17 +681,50 @@ export class AuthController {
    *    l'utilisateur n'est pas encore connecté (pas de token).
    *    L'identité est vérifiée via l'email + le code 2FA.
    *
+   * 🚦 Rate Limiting : 5 requêtes / minute / IP
+   *    Raison : protection critique — sans rate limiting,
+   *    un attaquant ayant un email valide pourrait brute force
+   *    le code TOTP à 6 chiffres (1M de combinaisons).
+   *    Les codes TOTP changent toutes les 30 secondes,
+   *    mais 5 tentatives/30s = protection renforcée.
+   *
    * @param dto → Verify2faDto contenant email + code 2FA
    * @returns   → AuthTokens (accessToken + refreshToken)
    */
   @Post('2fa/verify')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ auth: { limit: 5, ttl: 60_000 } })
   @ApiOperation({
-    summary: 'Vérifier le code à deux facteurs après la connexion',
+    summary: 'Vérifier le code 2FA après la connexion',
+    description: `
+Appelé après \`POST /auth/login\` quand \`requiresTwoFactor: true\`.
+Vérifie le code Google Authenticator et retourne les tokens JWT.
+
+**Flux** :
+1. \`POST /auth/login\` → \`{ requiresTwoFactor: true, email }\`
+2. \`POST /auth/2fa/verify\` avec le code → tokens JWT
+
+**Rate Limiting** : 5 requêtes / minute / IP (protection brute force TOTP)
+    `,
   })
   @ApiBody({ type: Verify2faDto })
-  @ApiResponse({ status: 200, description: 'Retourne les tokens JWT' })
-  @ApiResponse({ status: 401, description: 'Code à deux facteurs invalide' })
+  @ApiResponse({
+    status: 200,
+    description: 'Tokens JWT retournés',
+    schema: {
+      example: {
+        key: 'auth.login_success',
+        message: 'Login successful',
+        accessToken: 'eyJhbGc...',
+        refreshToken: 'eyJhbGc...',
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Code 2FA invalide' })
+  @ApiResponse({
+    status: 429,
+    description: 'Trop de requêtes — attendez 1 minute',
+  })
   async verify2FA(@Body() dto: Verify2faDto): Promise<AuthTokens> {
     return this.authService.verify2FA(dto);
   }
@@ -439,12 +744,24 @@ export class AuthController {
    *    Passport intercepte la requête avant même d'atteindre
    *    le corps de la méthode et redirige vers Google.
    *
+   * 💡 Pas de rate limiting — Google gère sa propre protection
+   *    contre les abus sur son infrastructure OAuth.
+   *
    * @returns void — Passport gère la redirection (302)
    */
   @Get('google')
   @UseGuards(GoogleAuthGuard)
   @ApiOperation({
     summary: 'Se connecter avec Google — redirige vers Google OAuth',
+    description: `
+Redirige l'utilisateur vers la page de connexion Google.
+Après authentification, Google rappelle \`GET /auth/google/callback\`.
+
+**Flow OAuth** :
+1. Ouvrir cette URL dans le navigateur
+2. Choisir un compte Google
+3. Redirection vers /auth/google/callback avec les tokens
+    `,
   })
   @ApiResponse({ status: 302, description: 'Redirige vers Google' })
   googleAuth(): void {
@@ -475,14 +792,43 @@ export class AuthController {
    *    );
    *    ────────────────────────────────────────────────────
    *
+   * 💡 3 cas gérés par OAuthService.handleGoogleLogin() :
+   *    1. Nouveau compte Google → crée l'utilisateur + OAuth account
+   *    2. Compte OAuth existant → login direct
+   *    3. Email existant (compte local) → lie le compte Google
+   *
    * @param user → profil Google extrait par GoogleStrategy
    * @param res  → réponse Express pour contrôle manuel
    * @returns    → AuthTokens retournés en JSON (développement)
    */
   @Get('google/callback')
   @UseGuards(GoogleAuthGuard)
-  @ApiOperation({ summary: 'Callback Google OAuth' })
-  @ApiResponse({ status: 200, description: 'Retourne les tokens JWT' })
+  @ApiOperation({
+    summary: 'Callback Google OAuth',
+    description: `
+Google redirige ici après l'authentification.
+Crée ou connecte le compte utilisateur automatiquement.
+
+**3 cas gérés** :
+- Nouveau compte Google → crée l'utilisateur (emailVerified: true)
+- Compte OAuth existant → connexion directe
+- Email existant (compte local) → lie le compte Google
+
+**En production** : rediriger vers le frontend avec les tokens
+    `,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Tokens JWT retournés',
+    schema: {
+      example: {
+        key: 'auth.login_success',
+        message: 'Login successful',
+        accessToken: 'eyJhbGc...',
+        refreshToken: 'eyJhbGc...',
+      },
+    },
+  })
   async googleCallback(
     @CurrentUser() user: GoogleUser,
     @Res() res: Response,

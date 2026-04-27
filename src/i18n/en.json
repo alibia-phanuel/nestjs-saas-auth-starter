@@ -30,16 +30,6 @@
     "deleted": "Account deleted successfully",
     "forbidden": "You do not have permission to perform this action"
   },
-  "organizations": {
-    "not_found": "Organization not found",
-    "created": "Organization created successfully",
-    "updated": "Organization updated successfully",
-    "deleted": "Organization deleted successfully",
-    "already_member": "User is already a member of this organization",
-    "invitation_sent": "Invitation sent successfully",
-    "invitation_invalid": "Invalid or expired invitation",
-    "invitation_accepted": "Invitation accepted successfully"
-  },
   "validation": {
     "required": "This field is required",
     "invalid_email": "Please provide a valid email address",
@@ -51,5 +41,18 @@
     "not_found": "Resource not found",
     "unauthorized": "Unauthorized",
     "forbidden": "Forbidden"
+  },
+  "organizations": {
+    "not_found": "Organization not found",
+    "created": "Organization created successfully",
+    "updated": "Organization updated successfully",
+    "deleted": "Organization deleted successfully",
+    "already_member": "User is already a member of this organization",
+    "not_member": "User is not a member of this organization",
+    "invitation_sent": "Invitation sent successfully",
+    "invitation_invalid": "Invalid or expired invitation",
+    "invitation_accepted": "Invitation accepted successfully",
+    "forbidden": "You do not have permission to perform this action",
+    "slug_taken": "This slug is already taken"
   }
 }

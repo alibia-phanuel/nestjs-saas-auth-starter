@@ -88,6 +88,7 @@ import { CommonModule } from './common/common.module';
       sortSchema: true,
       playground: true,
       csrfPrevention: false,
+      introspection: true, // autorise les outils graphiques en prod (Apollo Studio)
       context: ({ req }: { req: Request }) => ({ req }),
     }),
     GraphqlModule,
